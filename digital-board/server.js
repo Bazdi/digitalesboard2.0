@@ -13,8 +13,21 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
 
+// CORS-Konfiguration für lokales Netzwerk
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://192.168.112.166:3000',
+    'http://192.168.1.166:3000', // Fallback für andere Subnets
+    /^http:\/\/192\.168\.\d+\.\d+:3000$/ // Regex für alle 192.168.x.x:3000
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200 // Für ältere Browser
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
@@ -2188,9 +2201,13 @@ app.post('/api/work4all/sync-sickness', authenticateToken, async (req, res) => {
   }
 });
 
-// Server starten
-app.listen(PORT, () => {
+// Server starten - auf allen Netzwerk-Interfaces
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Erweiterter Server mit Heartbeat-System läuft auf Port ${PORT}`);
+  console.log(`🌐 Server verfügbar unter:`);
+  console.log(`   - http://localhost:${PORT}`);
+  console.log(`   - http://127.0.0.1:${PORT}`);
+  console.log(`   - http://192.168.112.166:${PORT}`);
   console.log(`📊 Verfügbare Features:`);
   console.log(`   - 📰 News-System mit Kategorien und Breaking News`);
   console.log(`   - 🚗 Fahrzeugverwaltung mit Buchungssystem`);
@@ -2204,7 +2221,7 @@ app.listen(PORT, () => {
   console.log(`   - 💓 Echtes Heartbeat-System für Kiosk-Tracking`);
   console.log('');
   console.log('🔧 Debug-Endpunkte:');
-  console.log(`   - GET http://localhost:${PORT}/api/test-db`);
+  console.log(`   - GET http://192.168.112.166:${PORT}/api/test-db`);
   console.log(`   - GET http://localhost:${PORT}/api/vehicles/stats`);
   console.log(`   - GET http://localhost:${PORT}/api/work4all/status`);
   console.log(`   - GET http://localhost:${PORT}/api/work4all/test`);

@@ -3,8 +3,16 @@ import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
 
-// Stelle sicher, dass axios immer an Port 5000 geht
-axios.defaults.baseURL = 'http://localhost:5000';
+// Setze die Basis-URL für alle API-Anfragen - dynamisch basierend auf Host
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  const port = '5000';
+  return `http://${hostname}:${port}`;
+};
+
+// Stelle sicher, dass axios an den richtigen Host und Port geht
+axios.defaults.baseURL = getApiBaseUrl();
+console.log('🌐 API Base URL:', axios.defaults.baseURL);
 
 const AdminPanel = () => {
   const [work4allStatus, setWork4allStatus] = useState({

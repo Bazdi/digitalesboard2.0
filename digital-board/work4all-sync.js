@@ -1342,21 +1342,44 @@ class Work4AllSyncService {
             
             console.log(`🏖️ URLAUB: ${employee.name} (${vacationType}${daysInfo})`);
             
-            // Setze employment_status auf 'urlaub' und speichere consecutive_days + Enddatum
+            // Berechne Start- und Enddatum für den Urlaub
+            const startDate = todayString;
+            const endDateFormatted = endDate || startDate;
+            
+            // Speichere in employee_vacation Tabelle
             await new Promise((resolve, reject) => {
               this.db.run(
-                'UPDATE employees SET employment_status = ?, vacation_days_left = ?, vacation_end_date = ? WHERE id = ?',
-                ['urlaub', consecutiveDays - 1, formattedEndDate, employee.id],
+                `INSERT OR REPLACE INTO employee_vacation 
+                 (employee_id, employee_name, work4all_code, work4all_vacation_code, start_date, end_date, vacation_days, vacation_type, work4all_sync_date) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+                [employee.id, employee.name, employee.work4all_code, employeeVacation.code, startDate, endDateFormatted, consecutiveDays, 'urlaub'],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            // Setze employment_status auf 'urlaub'
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ? WHERE id = ?',
+                ['urlaub', employee.id],
                 (err) => err ? reject(err) : resolve()
               );
             });
             
             currentVacations++;
           } else {
-            // Mitarbeiter ist nicht im Urlaub - setze Status zurück auf 'aktiv' (nur wenn vorher urlaub war)
+            // Mitarbeiter ist nicht im Urlaub - lösche aus Urlaubstabelle und setze Status zurück
             await new Promise((resolve, reject) => {
               this.db.run(
-                'UPDATE employees SET employment_status = ?, vacation_days_left = NULL, vacation_end_date = NULL WHERE id = ? AND employment_status = ?',
+                'DELETE FROM employee_vacation WHERE employee_id = ? AND start_date <= ? AND end_date >= ?',
+                [employee.id, todayString, todayString],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ? WHERE id = ? AND employment_status = ?',
                 ['aktiv', employee.id, 'urlaub'],
                 (err) => err ? reject(err) : resolve()
               );
@@ -1568,21 +1591,44 @@ class Work4AllSyncService {
             
             console.log(`🤒 KRANK: ${employee.name} (${sicknessType}${daysInfo})`);
             
-            // Setze employment_status auf 'krank' und speichere consecutive_days + Enddatum
+            // Berechne Start- und Enddatum für die Krankheit
+            const startDate = todayString;
+            const endDateFormatted = endDate || startDate;
+            
+            // Speichere in employee_sickness Tabelle
             await new Promise((resolve, reject) => {
               this.db.run(
-                'UPDATE employees SET employment_status = ?, sickness_days_left = ?, sickness_end_date = ? WHERE id = ?',
-                ['krank', consecutiveDays - 1, formattedEndDate, employee.id],
+                `INSERT OR REPLACE INTO employee_sickness 
+                 (employee_id, employee_name, work4all_code, work4all_sickness_code, start_date, end_date, sickness_days, sickness_type, work4all_sync_date) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+                [employee.id, employee.name, employee.work4all_code, employeeSickness.code, startDate, endDateFormatted, consecutiveDays, 'krankheit'],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            // Setze employment_status auf 'krank' 
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ? WHERE id = ?',
+                ['krank', employee.id],
                 (err) => err ? reject(err) : resolve()
               );
             });
             
             currentSickness++;
           } else {
-            // Mitarbeiter ist nicht krank - setze Status zurück auf 'aktiv' (nur wenn vorher krank war)
+            // Mitarbeiter ist nicht krank - lösche aus Krankheitstabelle und setze Status zurück
             await new Promise((resolve, reject) => {
               this.db.run(
-                'UPDATE employees SET employment_status = ?, sickness_days_left = NULL, sickness_end_date = NULL WHERE id = ? AND employment_status = ?',
+                'DELETE FROM employee_sickness WHERE employee_id = ? AND start_date <= ? AND end_date >= ?',
+                [employee.id, todayString, todayString],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ? WHERE id = ? AND employment_status = ?',
                 ['aktiv', employee.id, 'krank'],
                 (err) => err ? reject(err) : resolve()
               );

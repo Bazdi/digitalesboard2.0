@@ -1,0 +1,34 @@
+# Node.js Backend
+/digital-board/node_modules/
+
+# React Client
+/digital-board/client/node_modules/
+/digital-board/client/public/uploads/
+/digital-board/client/node_modules/.cache/
+/digital-board/client/node_modules/.eslintcache
+
+# Server Uploads
+/digital-board/public/uploads/
+
+# Log-Dateien
+*.log
+
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db
+
+# Editor-/IDE-spezifisch
+.vscode/
+.idea/
+
+# Build-Ordner (optional, falls vorhanden)
+dist/
+build/
+
+# Sonstiges
+.env
+.env.*
+
+# Paketmanager-Locks im Client (optional, falls nicht versioniert)
+/digital-board/client/package-lock.json
+/digital-board/client/yarn.lock 

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tooltip Persistenz Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background-color: #f8f9fa;
+        }
+        
+        .test-box {
+            width: 200px;
+            height: 100px;
+            background-color: #e74c3c;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 8px;
+            margin: 20px;
+            transition: transform 0.2s ease;
+        }
+        
+        .test-box:hover {
+            transform: scale(1.05);
+        }
+        
+        .tooltip {
+            position: fixed;
+            background-color: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+            pointer-events: auto;
+            user-select: none;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .event-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .event-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .instructions {
+            background-color: #3498db;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h2>🧪 Tooltip Persistenz Test</h2>
+        <p><strong>Test-Anleitung:</strong></p>
+        <ol>
+            <li>Hover über die rote Box</li>
+            <li>Bewege die Maus zum Tooltip</li>
+            <li>Scrolle im Tooltip</li>
+            <li>Das Tooltip sollte <strong>NICHT</strong> verschwinden!</li>
+        </ol>
+    </div>
+
+    <div class="test-box" id="testBox">
+        📅 Hover für Multi-Events
+    </div>
+
+    <div id="tooltip" class="tooltip" style="display: none;">
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px; color: #f39c12;">
+            🔄 5 gleichzeitige Veranstaltungen
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 IFFA 2025</div>
+            <div>📍 <strong>Ort:</strong> Frankfurt am Main</div>
+            <div>🗓️ <strong>Von:</strong> 02.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 6 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 PCIM Europe 2025</div>
+            <div>📍 <strong>Ort:</strong> Nürnberg</div>
+            <div>🗓️ <strong>Von:</strong> 05.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Interpack 2025</div>
+            <div>📍 <strong>Ort:</strong> Düsseldorf</div>
+            <div>🗓️ <strong>Von:</strong> 04.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 10.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Smart Country Convention</div>
+            <div>📍 <strong>Ort:</strong> Berlin</div>
+            <div>🗓️ <strong>Von:</strong> 06.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 08.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Bauma 2025</div>
+            <div>📍 <strong>Ort:</strong> München</div>
+            <div>🗓️ <strong>Von:</strong> 07.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 13.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+    </div>
+
+    <script>
+        const testBox = document.getElementById('testBox');
+        const tooltip = document.getElementById('tooltip');
+        let hideTimeout = null;
+
+        function showTooltip(event) {
+            // Lösche bestehende Hide-Timer
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+
+            const rect = testBox.getBoundingClientRect();
+            tooltip.style.left = (rect.right + 5) + 'px';
+            tooltip.style.top = rect.top + 'px';
+            tooltip.style.display = 'block';
+        }
+
+        function hideTooltipDelayed() {
+            // Verzögerte Ausblendung - gibt Zeit zum Hover auf Tooltip
+            hideTimeout = setTimeout(() => {
+                tooltip.style.display = 'none';
+            }, 300);
+        }
+
+        function keepTooltipVisible() {
+            // Tooltip-Hover: Lösche Hide-Timer
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+        }
+
+        function hideTooltipImmediate() {
+            // Sofortiges Ausblenden wenn Maus Tooltip verlässt
+            tooltip.style.display = 'none';
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+        }
+
+        // Event Listeners
+        testBox.addEventListener('mouseenter', showTooltip);
+        testBox.addEventListener('mouseleave', hideTooltipDelayed);
+        tooltip.addEventListener('mouseenter', keepTooltipVisible);
+        tooltip.addEventListener('mouseleave', hideTooltipImmediate);
+    </script>
+</body>
+</html> 

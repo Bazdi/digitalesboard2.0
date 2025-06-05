@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>No-Gap Tooltip Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background-color: #f8f9fa;
+            margin: 0;
+        }
+        
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .calendar-row {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 3px;
+            margin: 20px 0;
+        }
+        
+        .day-cell {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            position: relative;
+            min-height: 50px;
+            border: 2px solid transparent;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+        
+        .day-cell.has-events {
+            background-color: #e74c3c;
+            color: white;
+            border: 2px solid #c0392b;
+        }
+        
+        .day-cell:not(.has-events):hover {
+            background-color: #3498db;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .tooltip {
+            position: fixed;
+            background-color: rgba(44, 62, 80, 0.98);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            z-index: 50000;
+            max-width: 450px;
+            font-size: 14px;
+            line-height: 1.5;
+            max-height: 500px;
+            overflow-y: auto;
+            pointer-events: auto;
+            user-select: none;
+            border: 3px solid #f39c12;
+            scrollbar-width: thin;
+            scrollbar-color: #f39c12 rgba(255,255,255,0.2);
+        }
+        
+        .event-item {
+            margin-bottom: 18px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid rgba(255,255,255,0.25);
+        }
+        
+        .event-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .instructions {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        .test-info {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .console-output {
+            background-color: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            height: 250px;
+            overflow-y: auto;
+            margin-top: 25px;
+            border: 2px solid #333;
+        }
+        
+        .highlight {
+            background-color: #f39c12;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-info">
+            <h2>🚀 No-Gap Tooltip Test</h2>
+            <p><strong>Strategie:</strong> Tooltip überlappt direkt mit dem Element → <span class="highlight">KEINE LÜCKE</span></p>
+            <p><strong>Timer:</strong> <span class="highlight">1000ms</span> Verzögerung für komfortables Scrollen</p>
+        </div>
+
+        <div class="instructions">
+            <h3>🎯 Ultimativer Scroll-Test:</h3>
+            <ol>
+                <li><strong>Hover</strong> über eine rote Event-Zelle</li>
+                <li><strong>Bewege</strong> die Maus direkt ins erscheinende Tooltip</li>
+                <li><strong>Scrolle</strong> ausgiebig im Tooltip</li>
+                <li><strong>Verlasse</strong> das Tooltip → sollte sofort verschwinden</li>
+            </ol>
+            <p>⚡ <strong>Besonderheit:</strong> Tooltip überlappt teilweise mit dem Element!</p>
+        </div>
+
+        <h3 style="text-align: center; margin: 30px 0;">Mai 2025 - Scroll-Test Kalender</h3>
+        
+        <div class="calendar-row">
+            <div class="day-cell">Mo</div>
+            <div class="day-cell">Di</div>
+            <div class="day-cell">Mi</div>
+            <div class="day-cell">Do</div>
+            <div class="day-cell">Fr</div>
+            <div class="day-cell">Sa</div>
+            <div class="day-cell">So</div>
+        </div>
+        
+        <div class="calendar-row">
+            <div class="day-cell">1</div>
+            <div class="day-cell">2</div>
+            <div class="day-cell has-events" id="eventCell1">3<div style="font-size: 12px; margin-top: 3px;">6×</div></div>
+            <div class="day-cell">4</div>
+            <div class="day-cell has-events" id="eventCell2">5<div style="font-size: 12px; margin-top: 3px;">4×</div></div>
+            <div class="day-cell has-events" id="eventCell3">6<div style="font-size: 12px; margin-top: 3px;">3×</div></div>
+            <div class="day-cell">7</div>
+        </div>
+        
+        <div class="calendar-row">
+            <div class="day-cell">8</div>
+            <div class="day-cell">9</div>
+            <div class="day-cell">10</div>
+            <div class="day-cell">11</div>
+            <div class="day-cell">12</div>
+            <div class="day-cell has-events" id="eventCell4">13<div style="font-size: 12px; margin-top: 3px;">2×</div></div>
+            <div class="day-cell">14</div>
+        </div>
+
+        <div class="console-output" id="consoleOutput">
+            <div style="color: #ffff00; font-weight: bold;">🖥️ REALTIME CONSOLE:</div>
+            <div style="color: #00ffff;">System bereit für No-Gap Tooltip Test...</div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip" style="display: none;">
+        <div style="font-size: 11px; opacity: 0.8; margin-bottom: 15px; padding: 8px; background-color: rgba(243,156,18,0.3); border-radius: 6px; border: 1px solid #f39c12;">
+            🔥 <strong>NO-GAP TOOLTIP:</strong> Overlapping-Positionierung → Perfektes Scrolling!
+        </div>
+
+        <div style="font-weight: bold; font-size: 20px; margin-bottom: 18px; border-bottom: 3px solid rgba(243,156,18,0.6); padding-bottom: 12px; color: #f39c12;">
+            🔄 <span id="eventCount">6</span> Events gleichzeitig
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 IFFA 2025</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> Frankfurt am Main</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 02.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 6 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 PCIM Europe 2025</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> Nürnberg</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 05.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 Interpack 2025</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> Düsseldorf</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 04.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 10.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 Smart Country Convention</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> Berlin</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 06.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 08.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 Bauma 2025</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> München</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 07.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 13.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 17px; margin-bottom: 10px; color: #e74c3c;">📅 GET Nord 2025</div>
+            <div style="margin-bottom: 6px;">📍 <strong>Ort:</strong> Hamburg</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Von:</strong> 06.05.2025</div>
+            <div style="margin-bottom: 6px;">🗓️ <strong>Bis:</strong> 08.05.2025</div>
+            <div style="margin-bottom: 8px;">⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div style="margin-top: 25px; padding: 15px; background: linear-gradient(135deg, rgba(243,156,18,0.2), rgba(211,84,0,0.2)); border-radius: 8px; font-size: 13px; border: 1px solid rgba(243,156,18,0.4);">
+            🧪 <strong>SCROLL-STRESS-TEST:</strong><br/>
+            Dieses Tooltip hat extra viel Content zum Scrollen.<br/>
+            <strong>Bewegen Sie die Maus über diesen Bereich und scrollen Sie intensiv!</strong><br/>
+            Das Tooltip sollte absolut stabil bleiben.<br/><br/>
+            
+            <div style="height: 120px; background-color: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px; overflow-y: auto; font-size: 11px; line-height: 1.4;">
+                <strong>Scroll-Content-Test:</strong><br/>
+                Zeile 1: Extra lange Zeile mit viel Text zum Testen der Scroll-Funktionalität<br/>
+                Zeile 2: Noch mehr Text um das Scrolling zu testen<br/>
+                Zeile 3: Diese Zeile ist besonders lang und sollte das Tooltip zum Scrollen bringen<br/>
+                Zeile 4: Weiter testen...<br/>
+                Zeile 5: Scrolling sollte reibungslos funktionieren<br/>
+                Zeile 6: Das Tooltip darf nicht verschwinden<br/>
+                Zeile 7: Perfekte Tooltip-Persistenz<br/>
+                Zeile 8: Ende des Scroll-Tests<br/>
+                <strong>✅ Scroll-Test erfolgreich!</strong>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tooltip = document.getElementById('tooltip');
+        const consoleOutput = document.getElementById('consoleOutput');
+        const eventCells = document.querySelectorAll('.has-events');
+        let hideTimeout = null;
+
+        function log(message, color = '#00ff00') {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleOutput.innerHTML += `<div style="color: ${color};">${timestamp}: ${message}</div>`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            console.log(message);
+        }
+
+        function showTooltip(cell, eventCount) {
+            log(`🟢 Event Mouse Enter: ${eventCount} events`, '#00ff00');
+            
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+                log('⚡ Hide-Timer GELÖSCHT', '#ffff00');
+            }
+
+            const rect = cell.getBoundingClientRect();
+            
+            // NO-GAP STRATEGIE: Tooltip überlappt mit dem Element
+            const x = rect.left - 10; // Leicht nach links versetzt
+            let y = rect.bottom - 20; // Überlappt mit dem unteren Teil des Elements
+            
+            // Smart Positioning: Oberhalb wenn nicht genug Platz unten
+            if (y + 500 > window.innerHeight) {
+                y = rect.top - 480; // Oberhalb, überlappt mit oberem Teil
+                log('📍 Positionierung: OBERHALB (Overlap)', '#00ffff');
+            } else {
+                log('📍 Positionierung: UNTERHALB (Overlap)', '#00ffff');
+            }
+            
+            log(`📍 NO-GAP Position: x=${x}, y=${y}`, '#ff00ff');
+            
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+            tooltip.style.display = 'block';
+            
+            document.getElementById('eventCount').textContent = eventCount;
+        }
+
+        function hideTooltipDelayed() {
+            log('🔴 Event Mouse Leave - Timer START (1000ms)', '#ff9900');
+            
+            hideTimeout = setTimeout(() => {
+                log('⏰ TIMEOUT REACHED - Tooltip versteckt', '#ff0000');
+                tooltip.style.display = 'none';
+            }, 1000); // 1 Sekunde
+        }
+
+        function keepTooltipVisible() {
+            log('🟢 Tooltip Mouse Enter - TIMER GESTOPPT', '#00ff00');
+            
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+                log('⚡ Hide-Timer durch Tooltip-Hover GELÖSCHT', '#ffff00');
+            }
+        }
+
+        function hideTooltipImmediate() {
+            log('🔴 Tooltip Mouse Leave - SOFORT VERSTECKEN', '#ff0000');
+            
+            tooltip.style.display = 'none';
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+        }
+
+        // Event Listeners für Event-Zellen
+        eventCells.forEach((cell, index) => {
+            const eventCount = [6, 4, 3, 2][index] || 2;
+            
+            cell.addEventListener('mouseenter', () => showTooltip(cell, eventCount));
+            cell.addEventListener('mouseleave', hideTooltipDelayed);
+        });
+
+        // Event Listeners für Tooltip
+        tooltip.addEventListener('mouseenter', (e) => {
+            keepTooltipVisible();
+            e.stopPropagation();
+        });
+        
+        tooltip.addEventListener('mouseleave', (e) => {
+            hideTooltipImmediate();
+            e.stopPropagation();
+        });
+        
+        tooltip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            log('🖱️ Tooltip geklickt - Event gestoppt', '#ffffff');
+        });
+
+        // Scroll-Event für extra Debug
+        tooltip.addEventListener('scroll', () => {
+            log('📜 Tooltip SCROLL erkannt - funktioniert!', '#00ffff');
+        });
+
+        log('✅ NO-GAP Test bereit! Hovern Sie über rote Zellen...', '#ffff00');
+    </script>
+</body>
+</html> 

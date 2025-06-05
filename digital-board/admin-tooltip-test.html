@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal Tooltip Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 50px;
+            background-color: #f8f9fa;
+            margin: 0;
+        }
+        
+        .admin-layout {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+        }
+        
+        .month-container {
+            background-color: #fff;
+            border-radius: 12px;
+            padding: 15px;
+            border: 2px solid #ecf0f1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        
+        .day-cell {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            position: relative;
+            min-height: 35px;
+            border: 1px solid transparent;
+            background-color: #f8f9fa;
+            color: #2c3e50;
+        }
+        
+        .day-cell.has-events {
+            background-color: #e74c3c;
+            color: white;
+            font-weight: bold;
+            border: 2px solid #c0392b;
+        }
+        
+        .day-cell:not(.has-events):hover {
+            background-color: #3498db;
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        .tooltip {
+            position: fixed;
+            background-color: rgba(44, 62, 80, 0.95);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 10000;
+            max-width: 400px;
+            font-size: 14px;
+            line-height: 1.4;
+            max-height: 400px;
+            overflow-y: auto;
+            pointer-events: auto;
+            user-select: none;
+            border: 2px solid #3498db;
+            scrollbar-width: thin;
+            scrollbar-color: #3498db rgba(255,255,255,0.3);
+        }
+        
+        .event-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .event-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .debug-info {
+            background-color: #3498db;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .instructions {
+            background-color: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .console-output {
+            background-color: #2c3e50;
+            color: #2ecc71;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-layout">
+        <div class="debug-info">
+            <h2>🔧 Admin Portal Tooltip Debug</h2>
+            <p><strong>Problem:</strong> Tooltip verschwindet beim Hover → Scrollen unmöglich</p>
+            <p><strong>Test:</strong> Die roten Zellen simulieren Events. Hover drüber und bewege die Maus zum Tooltip.</p>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Test-Schritte:</h3>
+            <ol>
+                <li><strong>Hover</strong> über eine rote Zelle mit Event</li>
+                <li><strong>Bewege</strong> die Maus langsam zum erscheinenden Tooltip</li>
+                <li><strong>Scrolle</strong> im Tooltip (wenn möglich)</li>
+                <li><strong>Beobachte</strong> die Console-Ausgabe unten</li>
+            </ol>
+        </div>
+
+        <div class="calendar-grid">
+            <div class="month-container">
+                <h3 style="text-align: center; margin-bottom: 15px;">Mai 2025 - Test</h3>
+                
+                <div class="days-grid">
+                    <div class="day-cell">1</div>
+                    <div class="day-cell">2</div>
+                    <div class="day-cell has-events" id="eventCell1">3<div style="font-size: 10px; margin-top: 2px;">5×</div></div>
+                    <div class="day-cell">4</div>
+                    <div class="day-cell has-events" id="eventCell2">5<div style="font-size: 10px; margin-top: 2px;">3×</div></div>
+                    <div class="day-cell">6</div>
+                    <div class="day-cell">7</div>
+                    <div class="day-cell">8</div>
+                    <div class="day-cell">9</div>
+                    <div class="day-cell">10</div>
+                    <div class="day-cell">11</div>
+                    <div class="day-cell">12</div>
+                    <div class="day-cell">13</div>
+                    <div class="day-cell">14</div>
+                    <div class="day-cell">15</div>
+                    <div class="day-cell has-events" id="eventCell3">16<div style="font-size: 10px; margin-top: 2px;">2×</div></div>
+                    <div class="day-cell">17</div>
+                    <div class="day-cell">18</div>
+                    <div class="day-cell">19</div>
+                    <div class="day-cell">20</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="console-output" id="consoleOutput">
+            <div style="color: #f39c12;">🖥️ Console Output:</div>
+            <div>Bewege die Maus über die roten Event-Zellen...</div>
+        </div>
+    </div>
+
+    <div id="tooltip" class="tooltip" style="display: none;">
+        <div style="font-size: 10px; opacity: 0.7; margin-bottom: 10px; padding: 5px; background-color: rgba(255,255,255,0.1); border-radius: 3px;">
+            🐛 DEBUG: Tooltip aktiv - Scrolling möglich
+        </div>
+
+        <div style="font-weight: bold; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid rgba(255,255,255,0.3); padding-bottom: 10px; color: #f39c12;">
+            🔄 <span id="eventCount">5</span> gleichzeitige Veranstaltungen
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 IFFA 2025</div>
+            <div>📍 <strong>Ort:</strong> Frankfurt am Main</div>
+            <div>🗓️ <strong>Von:</strong> 02.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 6 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 PCIM Europe 2025</div>
+            <div>📍 <strong>Ort:</strong> Nürnberg</div>
+            <div>🗓️ <strong>Von:</strong> 05.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 07.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Interpack 2025</div>
+            <div>📍 <strong>Ort:</strong> Düsseldorf</div>
+            <div>🗓️ <strong>Von:</strong> 04.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 10.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Smart Country Convention</div>
+            <div>📍 <strong>Ort:</strong> Berlin</div>
+            <div>🗓️ <strong>Von:</strong> 06.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 08.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 3 Tage</div>
+        </div>
+        
+        <div class="event-item">
+            <div style="font-weight: bold; font-size: 16px; margin-bottom: 8px;">📅 Bauma 2025</div>
+            <div>📍 <strong>Ort:</strong> München</div>
+            <div>🗓️ <strong>Von:</strong> 07.05.2025</div>
+            <div>🗓️ <strong>Bis:</strong> 13.05.2025</div>
+            <div>⏱️ <strong>Dauer:</strong> 7 Tage</div>
+        </div>
+        
+        <div style="margin-top: 20px; padding: 10px; background-color: rgba(255,255,255,0.1); border-radius: 5px; font-size: 12px;">
+            🧪 <strong>Scroll-Test:</strong><br/>
+            Diese Box sollte scrollbar sein wenn es viele Events gibt.<br/>
+            Bewegen Sie die Maus über diesen Bereich und scrollen Sie.<br/>
+            Das Tooltip sollte NICHT verschwinden!<br/><br/>
+            <div style="height: 100px; background-color: rgba(255,255,255,0.05); padding: 10px; border-radius: 3px;">
+                Extra Scroll-Content um Scrolling zu testen...<br/>
+                Zeile 1<br/>Zeile 2<br/>Zeile 3<br/>Zeile 4<br/>Zeile 5<br/>
+                Ende des Scroll-Tests
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tooltip = document.getElementById('tooltip');
+        const consoleOutput = document.getElementById('consoleOutput');
+        const eventCells = document.querySelectorAll('.has-events');
+        let hideTimeout = null;
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleOutput.innerHTML += `<div style="color: #ecf0f1;">${timestamp}: ${message}</div>`;
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            console.log(message);
+        }
+
+        function showTooltip(cell, eventCount) {
+            log(`🟢 Event Mouse Enter: ${eventCount} events`);
+            
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+                log('⚡ Hide-Timer gelöscht');
+            }
+
+            const rect = cell.getBoundingClientRect();
+            
+            // BESSERE POSITIONIERUNG: Unter dem Element statt rechts daneben
+            const x = Math.max(10, Math.min(rect.left, window.innerWidth - 420));
+            let y = rect.bottom + 5; // Direkt unter dem Element
+            
+            // Falls nicht genug Platz unten, dann oberhalb
+            if (y + 400 > window.innerHeight) {
+                y = rect.top - 405; // Oberhalb des Elements
+                log('📍 Positionierung: Oberhalb (nicht genug Platz unten)');
+            } else {
+                log('📍 Positionierung: Unterhalb');
+            }
+            
+            log(`📍 Tooltip Position: x=${x}, y=${y}`);
+            
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+            tooltip.style.display = 'block';
+            
+            document.getElementById('eventCount').textContent = eventCount;
+        }
+
+        function hideTooltipDelayed() {
+            log('🔴 Event Mouse Leave - starte Timer (1000ms)');
+            
+            hideTimeout = setTimeout(() => {
+                log('⏰ Timer abgelaufen - verstecke Tooltip');
+                tooltip.style.display = 'none';
+            }, 1000); // 1 Sekunde statt 300ms
+        }
+
+        function keepTooltipVisible() {
+            log('🟢 Tooltip Mouse Enter - Timer gestoppt');
+            
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+                log('⚡ Hide-Timer durch Tooltip-Hover gelöscht');
+            }
+        }
+
+        function hideTooltipImmediate() {
+            log('🔴 Tooltip Mouse Leave - sofort verstecken');
+            
+            tooltip.style.display = 'none';
+            if (hideTimeout) {
+                clearTimeout(hideTimeout);
+                hideTimeout = null;
+            }
+        }
+
+        // Event Listeners für Event-Zellen
+        eventCells.forEach((cell, index) => {
+            const eventCount = index === 0 ? 5 : index === 1 ? 3 : 2;
+            
+            cell.addEventListener('mouseenter', () => showTooltip(cell, eventCount));
+            cell.addEventListener('mouseleave', hideTooltipDelayed);
+        });
+
+        // Event Listeners für Tooltip
+        tooltip.addEventListener('mouseenter', (e) => {
+            keepTooltipVisible();
+            e.stopPropagation();
+        });
+        
+        tooltip.addEventListener('mouseleave', (e) => {
+            hideTooltipImmediate();
+            e.stopPropagation();
+        });
+        
+        tooltip.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        log('✅ Test-Setup abgeschlossen. Hovern Sie über die roten Zellen!');
+    </script>
+</body>
+</html> 

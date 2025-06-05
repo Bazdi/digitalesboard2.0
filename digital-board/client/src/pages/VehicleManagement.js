@@ -60,6 +60,15 @@ const VehicleManagement = () => {
 
   useEffect(() => {
     fetchData();
+    
+    // Setze Standard-Zeiten für Buchungsformular
+    if (!bookingForm.start_datetime) {
+      setBookingForm(prev => ({
+        ...prev,
+        start_datetime: getDefaultStartTime(),
+        end_datetime: getDefaultEndTime()
+      }));
+    }
   }, []);
 
   const fetchData = async () => {
@@ -181,9 +190,20 @@ const VehicleManagement = () => {
         return;
       }
 
-      // Zeitvalidierung
+      // Verbesserte Zeitvalidierung
+      if (!bookingForm.start_datetime || !bookingForm.end_datetime) {
+        alert('Bitte geben Sie Start- und Endzeit an.');
+        return;
+      }
+
       const startTime = new Date(bookingForm.start_datetime);
       const endTime = new Date(bookingForm.end_datetime);
+      
+      // Prüfe auf ungültige Daten
+      if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+        alert('Ungültige Datums-/Uhrzeitangaben. Bitte überprüfen Sie Ihre Eingaben.');
+        return;
+      }
       
       if (startTime >= endTime) {
         alert('Das Enddatum muss nach dem Startdatum liegen.');
@@ -1045,6 +1065,7 @@ const VehicleManagement = () => {
                     value={bookingForm.start_datetime || getDefaultStartTime()}
                     onChange={handleBookingChange}
                     style={styles.input}
+                    min={new Date().toISOString().slice(0, 16)}
                     required
                   />
                 </div>
@@ -1057,6 +1078,7 @@ const VehicleManagement = () => {
                     value={bookingForm.end_datetime || getDefaultEndTime()}
                     onChange={handleBookingChange}
                     style={styles.input}
+                    min={bookingForm.start_datetime || new Date().toISOString().slice(0, 16)}
                     required
                   />
                 </div>

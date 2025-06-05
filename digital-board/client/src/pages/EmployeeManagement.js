@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
+import BulkEditModal from '../components/BulkEditModal';
 
 const EmployeeManagement = () => {
   const [employees, setEmployees] = useState([]);
@@ -13,6 +14,8 @@ const EmployeeManagement = () => {
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [editingContact, setEditingContact] = useState(null);
   const [filterCategory, setFilterCategory] = useState('all');
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
   
   const [employeeForm, setEmployeeForm] = useState({
     name: '',
@@ -573,6 +576,26 @@ const EmployeeManagement = () => {
     return icons[department] || '👤';
   };
 
+  const toggleEmployeeSelection = (employee) => {
+    setSelectedEmployees(prev => {
+      const isSelected = prev.some(emp => emp.id === employee.id);
+      if (isSelected) {
+        return prev.filter(emp => emp.id !== employee.id);
+      } else {
+        return [...prev, employee];
+      }
+    });
+  };
+
+  const selectAllEmployees = () => {
+    const filteredEmps = getFilteredEmployees();
+    setSelectedEmployees(filteredEmps);
+  };
+
+  const clearSelection = () => {
+    setSelectedEmployees([]);
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -676,6 +699,73 @@ const EmployeeManagement = () => {
                 </div>
               </div>
 
+              {/* BULK EDIT CONTROLS */}
+              {selectedEmployees.length > 0 && (
+                <div style={{
+                  backgroundColor: '#e8f4fd',
+                  padding: '15px',
+                  borderRadius: '10px',
+                  border: '2px solid #3498db',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <span style={{ fontWeight: 'bold', color: '#2980b9' }}>
+                      📋 {selectedEmployees.length} Mitarbeiter ausgewählt
+                    </span>
+                    <button
+                      onClick={() => setShowBulkEdit(true)}
+                      style={{
+                        backgroundColor: '#27ae60',
+                        color: 'white',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '14px'
+                      }}
+                    >
+                      ✏️ Bearbeiten
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={selectAllEmployees}
+                      style={{
+                        backgroundColor: '#3498db',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Alle auswählen
+                    </button>
+                    <button
+                      onClick={clearSelection}
+                      style={{
+                        backgroundColor: '#95a5a6',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Auswahl löschen
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* DEAKTIVIERTER ADD-BUTTON MIT HINWEIS */}
               <div style={{
                 backgroundColor: '#f8f9fa',
@@ -719,12 +809,25 @@ const EmployeeManagement = () => {
                     onMouseOut={(e) => e.currentTarget.style.transform = 'translateY(0)'}
                   >
                     <div style={styles.employeeHeader}>
-                      <div>
-                        <div style={styles.employeeName}>
-                          {getDepartmentIcon(employee.department)} {employee.name}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedEmployees.some(emp => emp.id === employee.id)}
+                          onChange={() => toggleEmployeeSelection(employee)}
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            cursor: 'pointer',
+                            marginTop: '2px'
+                          }}
+                        />
+                        <div>
+                          <div style={styles.employeeName}>
+                            {getDepartmentIcon(employee.department)} {employee.name}
+                          </div>
+                          <div style={styles.employeeTitle}>{employee.position_title}</div>
+                          <div style={styles.employeeDepartment}>{employee.department}</div>
                         </div>
-                        <div style={styles.employeeTitle}>{employee.position_title}</div>
-                        <div style={styles.employeeDepartment}>{employee.department}</div>
                       </div>
                       <div style={{
                         ...styles.statusBadge,
@@ -751,10 +854,10 @@ const EmployeeManagement = () => {
                         🎂 {employee.birthday || 'Kein Geburtstag'}
                       </div>
                       <div style={styles.detailItem}>
-                        📋 Brett: {employee.uses_bulletin_board ? '✅ Ja' : '❌ Nein'}
+                        📋 Brett: {employee.uses_bulletin_board ? 'Ja' : 'Nein'}
                       </div>
                       <div style={styles.detailItem}>
-                        🚗 Fahren: {employee.can_drive_company_vehicles ? '✅ Ja' : '❌ Nein'}
+                        🚗 Fahren: {employee.can_drive_company_vehicles ? 'Ja' : 'Nein'}
                       </div>
                       {employee.driving_license_classes && (
                         <div style={styles.detailItem}>
@@ -1096,50 +1199,83 @@ const EmployeeManagement = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      name="is_active_employee"
-                      checked={employeeForm.is_active_employee}
-                      onChange={handleEmployeeChange}
-                      style={styles.checkbox}
-                    />
-                    ✅ Aktiver Mitarbeiter
-                  </label>
+                {/* ERWEITERTE EINSTELLUNGEN - Separater Bereich */}
+                <div style={{
+                  marginTop: '20px',
+                  padding: '15px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  border: '1px solid #dee2e6'
+                }}>
+                  <h4 style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    color: '#495057',
+                    marginBottom: '15px',
+                    borderBottom: '1px solid #dee2e6',
+                    paddingBottom: '8px'
+                  }}>
+                    ⚙️ Erweiterte Berechtigungen & Synchronisation
+                  </h4>
                   
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      name="uses_bulletin_board"
-                      checked={employeeForm.uses_bulletin_board}
-                      onChange={handleEmployeeChange}
-                      style={styles.checkbox}
-                    />
-                    📋 Nutzt digitales Brett
-                  </label>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '10px'
+                  }}>
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        name="uses_bulletin_board"
+                        checked={employeeForm.uses_bulletin_board}
+                        onChange={handleEmployeeChange}
+                        style={styles.checkbox}
+                      />
+                      📋 Nutzt digitales Brett
+                    </label>
+                    
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        name="can_drive_company_vehicles"
+                        checked={employeeForm.can_drive_company_vehicles}
+                        onChange={handleEmployeeChange}
+                        style={styles.checkbox}
+                      />
+                      🚗 Darf Firmenwagen fahren
+                    </label>
+                    
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        name="has_key_access"
+                        checked={employeeForm.has_key_access}
+                        onChange={handleEmployeeChange}
+                        style={styles.checkbox}
+                      />
+                      🗝️ Hat Schlüsselzugang
+                    </label>
+                    
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        name="is_active_employee"
+                        checked={employeeForm.is_active_employee}
+                        onChange={handleEmployeeChange}
+                        style={styles.checkbox}
+                      />
+                      ✅ Aktiver Mitarbeiter
+                    </label>
+                  </div>
                   
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      name="can_drive_company_vehicles"
-                      checked={employeeForm.can_drive_company_vehicles}
-                      onChange={handleEmployeeChange}
-                      style={styles.checkbox}
-                    />
-                    🚗 Darf Firmenwagen fahren
-                  </label>
-                  
-                  <label style={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      name="has_key_access"
-                      checked={employeeForm.has_key_access}
-                      onChange={handleEmployeeChange}
-                      style={styles.checkbox}
-                    />
-                    🗝️ Hat Schlüsselzugang
-                  </label>
+                  <div style={{
+                    marginTop: '10px',
+                    fontSize: '12px',
+                    color: '#6c757d',
+                    fontStyle: 'italic'
+                  }}>
+                    💡 Diese Einstellungen werden bei work4all-Synchronisation automatisch gesetzt
+                  </div>
                 </div>
 
                 <div style={styles.buttonGroup}>
@@ -1293,9 +1429,20 @@ const EmployeeManagement = () => {
             </div>
           </div>
         )}
-      </div>
-    </Layout>
-  );
-};
+              </div>
+
+        {/* Bulk Edit Modal */}
+        <BulkEditModal 
+          isOpen={showBulkEdit}
+          onClose={() => setShowBulkEdit(false)}
+          selectedEmployees={selectedEmployees}
+          onUpdate={() => {
+            fetchData();
+            clearSelection();
+          }}
+        />
+      </Layout>
+    );
+  };
 
 export default EmployeeManagement;

@@ -3,10 +3,10 @@ const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
 
 class Work4AllSyncService {
-  constructor() {
+  constructor(db = null) {
     this.baseUrl = 'http://192.168.112.18:4713/api';
     this.token = null;
-    this.db = new sqlite3.Database('./database.db');
+    this.db = db || new sqlite3.Database('./database.db');
     
     // Authentifizierungsdaten für work4all
     this.credentials = {
@@ -43,6 +43,49 @@ class Work4AllSyncService {
         console.error('Data:', error.response.data);
       }
       return false;
+    }
+  }
+
+  // Allgemeine API-Request-Methode
+  async makeApiRequest(method, endpoint, data = null) {
+    try {
+      if (!this.token) {
+        const authSuccess = await this.authenticate();
+        if (!authSuccess) {
+          throw new Error('Authentifizierung fehlgeschlagen');
+        }
+      }
+
+      const config = {
+        method: method.toLowerCase(),
+        url: `${this.baseUrl}${endpoint}`,
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      };
+
+      if (data && (method.toLowerCase() === 'post' || method.toLowerCase() === 'put')) {
+        config.data = data;
+      }
+
+      const response = await axios(config);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ API Request Fehler (${method} ${endpoint}):`, error.message);
+      
+      // Token erneuern und nochmal versuchen bei 401
+      if (error.response && error.response.status === 401) {
+        console.log('🔄 Token abgelaufen, erneuere Authentifizierung...');
+        this.token = null;
+        const authSuccess = await this.authenticate();
+        if (authSuccess) {
+          return await this.makeApiRequest(method, endpoint, data);
+        }
+      }
+      
+      throw error;
     }
   }
 
@@ -300,12 +343,6 @@ class Work4AllSyncService {
 
   // work4all Daten in lokales Format konvertieren
   convertWork4AllToLocal(work4allEmployee) {
-    // Führerscheinklassen aus userRoles extrahieren (falls vorhanden)
-    const extractLicenseClasses = (employee) => {
-      // Hier könnte man aus den userRoles oder anderen Feldern Führerscheindaten ableiten
-      // Für jetzt nehmen wir Standard-PKW-Führerschein an
-      return 'B';
-    };
 
     // Abteilung zuordnen
     const mapDepartment = (abteilung) => {
@@ -342,11 +379,17 @@ class Work4AllSyncService {
       }
     };
 
+    // Bestimme Arbeitsort
+    const workLocation = determineWorkLocation(work4allEmployee.funktion, work4allEmployee.abteilung);
+    
     // Bestimme ob Mitarbeiter das digitale Brett nutzen soll
-    // Externe, Gekündigte und Ressourcen nutzen das Brett NICHT
+    // NUR LAGER-MITARBEITER nutzen das Brett standardmäßig
     const isActiveInternalEmployee = !work4allEmployee.ausgeschieden && 
                                    !work4allEmployee.extern && 
                                    work4allEmployee.licenseInformation?.userType !== 'ressource';
+    
+    // Brett nur für Lager-Mitarbeiter voreingestellt
+    const usesBulletinBoard = isActiveInternalEmployee && workLocation === 'lager';
 
     return {
       // Basis-Informationen
@@ -364,14 +407,14 @@ class Work4AllSyncService {
       // Status und Typen
       employee_type: work4allEmployee.extern ? 'extern' : 'intern',
       is_active_employee: !work4allEmployee.ausgeschieden,
-      uses_bulletin_board: isActiveInternalEmployee, // NUR aktive interne Mitarbeiter
-      work_location: determineWorkLocation(work4allEmployee.funktion, work4allEmployee.abteilung),
+      uses_bulletin_board: usesBulletinBoard, // NUR Lager-Mitarbeiter
+      work_location: workLocation,
       employment_status: work4allEmployee.ausgeschieden ? 'gekündigt' : 'aktiv',
       
-      // Berechtigungen (Standard-Werte, können später angepasst werden)
-      driving_license_classes: extractLicenseClasses(work4allEmployee),
+      // Berechtigungen (Standard-Werte, müssen manuell gesetzt werden)
+      driving_license_classes: null, // Muss manuell gepflegt werden
       license_expires: null, // Muss manuell gepflegt werden
-      can_drive_company_vehicles: isActiveInternalEmployee, // Nur aktive interne Mitarbeiter
+      can_drive_company_vehicles: false, // Muss manuell gesetzt werden
       has_key_access: false, // Sicherheitsrelevant, muss manuell gesetzt werden
       security_clearance_level: 1,
       
@@ -396,19 +439,19 @@ class Work4AllSyncService {
           }
 
           if (row) {
-            // Update bestehender Mitarbeiter
+            // Update bestehender Mitarbeiter (ohne Brett/Fahren/Führerschein zu überschreiben)
             this.db.run(
               `UPDATE employees SET 
                name = ?, email = ?, birthday = ?, department = ?, position_title = ?, 
                phone = ?, mobile = ?, extension = ?, employee_type = ?, is_active_employee = ?,
-               uses_bulletin_board = ?, work_location = ?, employment_status = ?,
+               work_location = ?, employment_status = ?,
                work4all_nummer = ?, work4all_last_update = ?, updated_at = CURRENT_TIMESTAMP
                WHERE work4all_code = ?`,
               [
                 employeeData.name, employeeData.email, employeeData.birthday,
                 employeeData.department, employeeData.position_title, employeeData.phone,
                 employeeData.mobile, employeeData.extension, employeeData.employee_type,
-                employeeData.is_active_employee ? 1 : 0, employeeData.uses_bulletin_board ? 1 : 0,
+                employeeData.is_active_employee ? 1 : 0,
                 employeeData.work_location, employeeData.employment_status,
                 employeeData.work4all_nummer, employeeData.work4all_last_update,
                 employeeData.work4all_code
@@ -1122,6 +1165,456 @@ class Work4AllSyncService {
         success: false,
         error: error.message
       };
+    }
+  }
+
+  // NEUE Methode: Urlaub-Synchronisation
+  async syncVacationData() {
+    try {
+      console.log('🏖️ Synchronisiere Urlaub-Daten von work4all...');
+      
+      // 1. Authentifizierung sicherstellen
+      if (!this.token) {
+        const authSuccess = await this.authenticate();
+        if (!authSuccess) {
+          throw new Error('Authentifizierung fehlgeschlagen');
+        }
+      }
+      
+      // 2. Alle work4all Benutzer laden
+      console.log('👥 Lade alle work4all Benutzer...');
+      const work4allUsers = await this.makeApiRequest('GET', '/work4all/benutzer');
+      console.log(`📋 ${work4allUsers.length} work4all Benutzer erhalten`);
+      
+      // 3. Alle Urlaubsdaten laden (ein API-Call für alle)
+      console.log('🏖️ Lade alle Urlaubsdaten...');
+      const vacationResponse = await this.makeApiRequest('POST', '/Urlaub/query', {});
+      
+      // Stelle sicher, dass wir ein Array haben - Urlaub-API gibt direktes Array zurück
+      const allVacations = Array.isArray(vacationResponse) ? vacationResponse : 
+                          vacationResponse.items ? vacationResponse.items : 
+                          vacationResponse.values ? vacationResponse.values : [];
+      
+      console.log(`📅 ${allVacations.length} Urlaubseinträge erhalten`);
+      
+      // 4. Lokale Mitarbeiter mit work4all_code laden
+      const localEmployees = await new Promise((resolve, reject) => {
+        this.db.all(
+          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1',
+          [],
+          (err, rows) => err ? reject(err) : resolve(rows)
+        );
+      });
+      
+      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden`);
+      
+      if (localEmployees.length === 0) {
+        console.log('⚠️ Keine lokalen Mitarbeiter mit work4all_code - führen Sie zuerst eine Mitarbeiter-Synchronisation durch');
+        return {
+          success: false,
+          message: 'Keine Mitarbeiter mit work4all_code gefunden'
+        };
+      }
+      
+      // 5. Heutiges Datum für Vergleich
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD Format
+      console.log(`📅 Prüfe Urlaub für heutiges Datum: ${todayString}`);
+      
+      // 6. Filtere Urlaubseinträge für heute
+      const todayVacations = allVacations.filter(vacation => {
+        // WICHTIG: Direkte String-Extraktion um Zeitzone-Probleme zu vermeiden
+        const vacationDateString = vacation.datum.split('T')[0]; // "2025-06-06T00:00:00" -> "2025-06-06"
+        
+        // Prüfe Datum
+        const isToday = vacationDateString === todayString;
+        
+        // Prüfe ob Menge > 0 (Genehmigung wird NICHT mehr geprüft, da auch nicht-genehmigte Urlaube gültig sind)
+        const hasValidAmount = vacation.menge && vacation.menge > 0;
+        
+        return isToday && hasValidAmount;
+      });
+      
+      // 6b. Hilfsfunktionen für Datum-Prüfung
+      const isWeekend = (date) => {
+        const dayOfWeek = date.getDay(); // 0 = Sonntag, 6 = Samstag
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      };
+      
+      const isGermanHoliday = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+        const day = date.getDate();
+        
+        // Feste Feiertage
+        const fixedHolidays = [
+          { month: 1, day: 1 },   // Neujahr
+          { month: 5, day: 1 },   // Tag der Arbeit
+          { month: 10, day: 3 },  // Tag der Deutschen Einheit
+          { month: 12, day: 25 }, // 1. Weihnachtsfeiertag
+          { month: 12, day: 26 }  // 2. Weihnachtsfeiertag
+        ];
+        
+        for (const holiday of fixedHolidays) {
+          if (month === holiday.month && day === holiday.day) {
+            return true;
+          }
+        }
+        
+        // Bewegliche Feiertage (Oster-abhängig) - vereinfachte Prüfung für häufige Feiertage
+        // Hier könnte man eine vollständige Oster-Berechnung implementieren
+        // Für jetzt prüfen wir nur die wichtigsten bekannten Daten
+        const knownHolidays2025 = [
+          '2025-04-18', // Karfreitag
+          '2025-04-21', // Ostermontag
+          '2025-05-29', // Christi Himmelfahrt
+          '2025-06-09'  // Pfingstmontag
+        ];
+        
+        const dateString = date.toISOString().split('T')[0];
+        return knownHolidays2025.includes(dateString);
+      };
+      
+      const isWorkingDay = (date) => {
+        return !isWeekend(date) && !isGermanHoliday(date);
+      };
+      
+      // 6c. Funktion: Zähle aufeinanderfolgende Urlaubstage ab heute und finde Enddatum (überspringt Wochenenden/Feiertage)
+      const countConsecutiveVacationDays = (employeeCode) => {
+        let count = 0;
+        let currentDate = new Date(today);
+        let lastVacationDate = null;
+        
+        while (count < 30) { // Max 30 Tage voraus prüfen
+          const dateString = currentDate.toISOString().split('T')[0];
+          
+          // Prüfe ob aktuelles Datum ein Arbeitstag ist
+          if (isWorkingDay(currentDate)) {
+            // Nur an Arbeitstagen nach Urlaub suchen
+            const hasVacationOnDate = allVacations.some(vacation => {
+              const vacationDateString = vacation.datum.split('T')[0];
+              return vacationDateString === dateString && 
+                     vacation.benutzerCode == employeeCode && 
+                     vacation.menge && vacation.menge > 0;
+            });
+            
+            if (hasVacationOnDate) {
+              count++;
+              lastVacationDate = dateString; // Merke letztes Urlaubsdatum
+            } else {
+              // Kein Urlaub an diesem Arbeitstag - Kette unterbrochen
+              break;
+            }
+          }
+          // Wochenenden/Feiertage werden einfach übersprungen (count nicht erhöht)
+          
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return { count, endDate: lastVacationDate };
+      };
+      
+      console.log(`🏖️ ${todayVacations.length} work4all Urlaubseinträge für heute gefunden`);
+      
+      let currentVacations = 0;
+      let processedEmployees = 0;
+      let errors = 0;
+      
+      // 7. Für jeden lokalen Mitarbeiter prüfen
+      for (const employee of localEmployees) {
+        try {
+          // Prüfe ob dieser Mitarbeiter heute im Urlaub ist
+          const employeeVacation = todayVacations.find(vacation => vacation.benutzerCode == employee.work4all_code);
+          
+          if (employeeVacation) {
+            // Mitarbeiter ist im Urlaub
+            const vacationAmount = employeeVacation.menge;
+            const vacationType = vacationAmount === 1.0 ? 'ganzer Tag' : vacationAmount === 0.5 ? 'halber Tag' : `${vacationAmount} Tage`;
+            
+            // Zähle aufeinanderfolgende Urlaubstage
+            const vacationResult = countConsecutiveVacationDays(employee.work4all_code);
+            const consecutiveDays = vacationResult.count;
+            const endDate = vacationResult.endDate;
+            
+            // Formatiere Enddatum zu deutschem Format (DD-MM-YYYY)
+            const formattedEndDate = endDate ? endDate.split('-').reverse().join('-') : null;
+            const daysInfo = consecutiveDays > 1 ? ` (noch ${consecutiveDays - 1} weitere Werktage bis einschließlich ${formattedEndDate})` : '';
+            
+            console.log(`🏖️ URLAUB: ${employee.name} (${vacationType}${daysInfo})`);
+            
+            // Setze employment_status auf 'urlaub' und speichere consecutive_days + Enddatum
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ?, vacation_days_left = ?, vacation_end_date = ? WHERE id = ?',
+                ['urlaub', consecutiveDays - 1, formattedEndDate, employee.id],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            currentVacations++;
+          } else {
+            // Mitarbeiter ist nicht im Urlaub - setze Status zurück auf 'aktiv' (nur wenn vorher urlaub war)
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ?, vacation_days_left = NULL, vacation_end_date = NULL WHERE id = ? AND employment_status = ?',
+                ['aktiv', employee.id, 'urlaub'],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+          }
+          
+          processedEmployees++;
+          
+        } catch (empError) {
+          errors++;
+          console.error(`❌ Fehler bei Mitarbeiter ${employee.name}:`, empError.message);
+        }
+      }
+      
+      console.log('\n📊 Urlaub-Synchronisation abgeschlossen:');
+      console.log(`👥 Lokale Mitarbeiter verarbeitet: ${processedEmployees}/${localEmployees.length}`);
+      console.log(`🏖️ Heute im Urlaub: ${currentVacations}`);
+      console.log(`📅 work4all Urlaubseinträge gesamt: ${allVacations.length}`);
+      console.log(`❌ Fehler: ${errors}`);
+      
+      return {
+        success: true,
+        processedEmployees,
+        currentVacations,
+        totalVacationDays: allVacations.length,
+        errors,
+        message: `${currentVacations} Mitarbeiter sind heute im Urlaub`
+      };
+      
+    } catch (error) {
+      console.error('❌ Fehler bei Urlaub-Synchronisation:', error);
+      throw error;
+    }
+  }
+
+  // NEUE Methode: Krankheits-Synchronisation
+  async syncSicknessData() {
+    try {
+      console.log('🤒 Synchronisiere Krankheits-Daten von work4all...');
+      
+      // 1. Authentifizierung sicherstellen
+      if (!this.token) {
+        const authSuccess = await this.authenticate();
+        if (!authSuccess) {
+          throw new Error('Authentifizierung fehlgeschlagen');
+        }
+      }
+      
+      // 2. Alle work4all Benutzer laden
+      console.log('👥 Lade alle work4all Benutzer...');
+      const work4allUsers = await this.makeApiRequest('GET', '/work4all/benutzer');
+      console.log(`📋 ${work4allUsers.length} work4all Benutzer erhalten`);
+      
+      // 3. Alle Krankheitsdaten laden
+      console.log('🤒 Lade alle Krankheitsdaten...');
+      const sicknessResponse = await this.makeApiRequest('POST', '/Krankheit/query', {});
+      console.log('🔍 Raw Krankheitsdaten-Antwort:', typeof sicknessResponse, sicknessResponse);
+      
+      // Stelle sicher, dass wir ein Array haben
+      const allSickness = Array.isArray(sicknessResponse) ? sicknessResponse : 
+                         sicknessResponse.data ? sicknessResponse.data : 
+                         sicknessResponse.values ? sicknessResponse.values : 
+                         sicknessResponse.items ? sicknessResponse.items : [];
+      
+      console.log(`📅 ${allSickness.length} Krankheitseinträge erhalten`);
+      
+      // 4. Lokale Mitarbeiter mit work4all_code laden
+      const localEmployees = await new Promise((resolve, reject) => {
+        this.db.all(
+          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1',
+          [],
+          (err, rows) => err ? reject(err) : resolve(rows)
+        );
+      });
+      
+      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden`);
+      
+      if (localEmployees.length === 0) {
+        console.log('⚠️ Keine lokalen Mitarbeiter mit work4all_code - führen Sie zuerst eine Mitarbeiter-Synchronisation durch');
+        return {
+          success: false,
+          message: 'Keine Mitarbeiter mit work4all_code gefunden'
+        };
+      }
+      
+      // 5. Heutiges Datum für Vergleich
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0]; // YYYY-MM-DD Format
+      console.log(`📅 Prüfe Krankheit für heutiges Datum: ${todayString}`);
+      
+      // 6. Filtere Krankheitseinträge für heute
+      const todaySickness = allSickness.filter(sickness => {
+        // WICHTIG: Direkte String-Extraktion um Zeitzone-Probleme zu vermeiden
+        const sicknessDateString = sickness.datum.split('T')[0]; // "2025-06-06T00:00:00" -> "2025-06-06"
+        
+        // Prüfe Datum
+        const isToday = sicknessDateString === todayString;
+        
+        // Prüfe ob Menge > 0 (keine Genehmigung nötig bei Krankheit)
+        const hasValidAmount = sickness.menge && sickness.menge > 0;
+        
+        return isToday && hasValidAmount;
+      });
+      
+      // 6b. Hilfsfunktionen für Datum-Prüfung (wiederverwendet)
+      const isWeekend = (date) => {
+        const dayOfWeek = date.getDay(); // 0 = Sonntag, 6 = Samstag
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      };
+      
+      const isGermanHoliday = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // JavaScript months are 0-indexed
+        const day = date.getDate();
+        
+        // Feste Feiertage
+        const fixedHolidays = [
+          { month: 1, day: 1 },   // Neujahr
+          { month: 5, day: 1 },   // Tag der Arbeit
+          { month: 10, day: 3 },  // Tag der Deutschen Einheit
+          { month: 12, day: 25 }, // 1. Weihnachtsfeiertag
+          { month: 12, day: 26 }  // 2. Weihnachtsfeiertag
+        ];
+        
+        for (const holiday of fixedHolidays) {
+          if (month === holiday.month && day === holiday.day) {
+            return true;
+          }
+        }
+        
+        // Bewegliche Feiertage (Oster-abhängig) - vereinfachte Prüfung für häufige Feiertage
+        // Hier könnte man eine vollständige Oster-Berechnung implementieren
+        // Für jetzt prüfen wir nur die wichtigsten bekannten Daten
+        const knownHolidays2025 = [
+          '2025-04-18', // Karfreitag
+          '2025-04-21', // Ostermontag
+          '2025-05-29', // Christi Himmelfahrt
+          '2025-06-09'  // Pfingstmontag
+        ];
+        
+        const dateString = date.toISOString().split('T')[0];
+        return knownHolidays2025.includes(dateString);
+      };
+      
+      const isWorkingDay = (date) => {
+        return !isWeekend(date) && !isGermanHoliday(date);
+      };
+      
+      // 6c. Funktion: Zähle aufeinanderfolgende Krankheitstage ab heute und finde Enddatum (überspringt Wochenenden/Feiertage)
+      const countConsecutiveSicknessDays = (employeeCode) => {
+        let count = 0;
+        let currentDate = new Date(today);
+        let lastSicknessDate = null;
+        
+        while (count < 30) { // Max 30 Tage voraus prüfen
+          const dateString = currentDate.toISOString().split('T')[0];
+          
+          // Prüfe ob aktuelles Datum ein Arbeitstag ist
+          if (isWorkingDay(currentDate)) {
+            // Nur an Arbeitstagen nach Krankheit suchen
+            const hasSicknessOnDate = allSickness.some(sickness => {
+              const sicknessDateString = sickness.datum.split('T')[0];
+              return sicknessDateString === dateString && 
+                     sickness.benutzerCode == employeeCode && 
+                     sickness.menge && sickness.menge > 0;
+            });
+            
+            if (hasSicknessOnDate) {
+              count++;
+              lastSicknessDate = dateString; // Merke letztes Krankheitsdatum
+            } else {
+              // Keine Krankheit an diesem Arbeitstag - Kette unterbrochen
+              break;
+            }
+          }
+          // Wochenenden/Feiertage werden einfach übersprungen (count nicht erhöht)
+          
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return { count, endDate: lastSicknessDate };
+      };
+      
+      console.log(`🤒 ${todaySickness.length} work4all Krankheitseinträge für heute gefunden`);
+      
+      let currentSickness = 0;
+      let processedEmployees = 0;
+      let errors = 0;
+      
+      // 7. Für jeden lokalen Mitarbeiter prüfen
+      for (const employee of localEmployees) {
+        try {
+          // Prüfe ob dieser Mitarbeiter heute krank ist
+          const employeeSickness = todaySickness.find(sickness => sickness.benutzerCode == employee.work4all_code);
+          
+          if (employeeSickness) {
+            // Mitarbeiter ist krank
+            const sicknessAmount = employeeSickness.menge;
+            const sicknessType = sicknessAmount === 1.0 ? 'ganzer Tag' : sicknessAmount === 0.5 ? 'halber Tag' : `${sicknessAmount} Tage`;
+            
+            // Zähle aufeinanderfolgende Krankheitstage
+            const sicknessResult = countConsecutiveSicknessDays(employee.work4all_code);
+            const consecutiveDays = sicknessResult.count;
+            const endDate = sicknessResult.endDate;
+            
+            // Formatiere Enddatum zu deutschem Format (DD-MM-YYYY)
+            const formattedEndDate = endDate ? endDate.split('-').reverse().join('-') : null;
+            const daysInfo = consecutiveDays > 1 ? ` (noch ${consecutiveDays - 1} weitere Werktage bis einschließlich ${formattedEndDate})` : '';
+            
+            console.log(`🤒 KRANK: ${employee.name} (${sicknessType}${daysInfo})`);
+            
+            // Setze employment_status auf 'krank' und speichere consecutive_days + Enddatum
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ?, sickness_days_left = ?, sickness_end_date = ? WHERE id = ?',
+                ['krank', consecutiveDays - 1, formattedEndDate, employee.id],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            currentSickness++;
+          } else {
+            // Mitarbeiter ist nicht krank - setze Status zurück auf 'aktiv' (nur wenn vorher krank war)
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                'UPDATE employees SET employment_status = ?, sickness_days_left = NULL, sickness_end_date = NULL WHERE id = ? AND employment_status = ?',
+                ['aktiv', employee.id, 'krank'],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+          }
+          
+          processedEmployees++;
+          
+        } catch (empError) {
+          errors++;
+          console.error(`❌ Fehler bei Mitarbeiter ${employee.name}:`, empError.message);
+        }
+      }
+      
+      console.log('\n📊 Krankheits-Synchronisation abgeschlossen:');
+      console.log(`👥 Lokale Mitarbeiter verarbeitet: ${processedEmployees}/${localEmployees.length}`);
+      console.log(`🤒 Heute krank: ${currentSickness}`);
+      console.log(`📅 work4all Krankheitseinträge gesamt: ${allSickness.length}`);
+      console.log(`❌ Fehler: ${errors}`);
+      
+      return {
+        success: true,
+        processedEmployees,
+        currentSickness,
+        totalSicknessDays: allSickness.length,
+        errors,
+        message: `${currentSickness} Mitarbeiter sind heute krank`
+      };
+      
+    } catch (error) {
+      console.error('❌ Fehler bei Krankheits-Synchronisation:', error);
+      throw error;
     }
   }
 }

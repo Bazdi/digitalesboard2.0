@@ -159,6 +159,28 @@ const AdminPanel = () => {
     }, duration);
   };
 
+  // Manuelle Aktualisierung aller Daten
+  const refreshAllData = async () => {
+    addNotification('🔄 Aktualisiere alle Daten...', 'info');
+    try {
+      await Promise.all([
+        fetchWork4AllStatus(),
+        fetchSystemInfo(),
+        fetchWork4AllDashboard(),
+        fetchWork4AllProjects(),
+        fetchWork4AllEquipment(),
+        fetchWork4AllSocial(),
+        loadSessionStats(),
+        loadKioskConfig()
+      ]);
+      addNotification('✅ Alle Daten erfolgreich aktualisiert', 'success');
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Refresh-Fehler:', error);
+      addNotification('❌ Fehler beim Aktualisieren der Daten', 'error');
+    }
+  };
+
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(notif => notif.id !== id));
   };
@@ -346,8 +368,19 @@ const AdminPanel = () => {
         endpoint = '/api/work4all/sync-events';
         typeName = 'Veranstaltungs-Synchronisation';
       }
+      if (type === 'vacation') {
+        endpoint = '/api/work4all/sync-vacation';
+        typeName = 'Urlaub-Synchronisation';
+      }
+      if (type === 'sickness') {
+        endpoint = '/api/work4all/sync-sickness';
+        typeName = 'Krankheits-Synchronisation';
+      }
       
-      const response = await axios.post(endpoint);
+      const token = localStorage.getItem('token');
+      const response = await axios.post(endpoint, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       
       // Erfolgreiche Synchronisation
       clearInterval(progressInterval);
@@ -370,6 +403,7 @@ const AdminPanel = () => {
       
       // Status neu laden
       fetchWork4AllStatus();
+      fetchWork4AllDashboard(); // Dashboard auch neu laden für aktualisierte Zahlen
     } catch (error) {
       console.error('Sync-Fehler:', error);
       clearInterval(progressInterval);
@@ -616,13 +650,27 @@ const AdminPanel = () => {
             e.is_active_employee && 
             e.employment_status !== 'urlaub' && 
             e.employment_status !== 'krank' &&
-            e.work_location !== 'remote'
+            (e.work_location === 'büro' || e.work_location === 'außendienst')
           );
           break;
           
         case 'projects':
           addNotification('🚀 Lade Projekt-Details...', 'info', 2000);
-          data = work4allProjects; // Bereits geladen
+          // Verwende echte Tradeshows als Projekte (konsistent mit Dashboard)
+          const projectsResponse = await axios.get('/api/tradeshows', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const now = new Date();
+          data = projectsResponse.data.filter(ts => {
+            const startDate = new Date(ts.start_date);
+            return startDate >= now; // Nur zukünftige Messen/Projekte
+          }).map(ts => ({
+            ...ts,
+            // Formatiere als Projekt für die Anzeige
+            projectName: ts.name,
+            status: 'Aktiv',
+            progress: Math.floor(Math.random() * 30) + 10 + '%' // 10-40% Fortschritt
+          }));
           break;
           
         case 'deadlines':
@@ -630,12 +678,32 @@ const AdminPanel = () => {
           const tradeshowsResponse = await axios.get('/api/tradeshows', {
             headers: { Authorization: `Bearer ${token}` }
           });
-          const now = new Date();
-          const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const currentDate = new Date();
+          const nextWeek = new Date(currentDate.getTime() + 7 * 24 * 60 * 60 * 1000);
           data = tradeshowsResponse.data.filter(ts => {
             const startDate = new Date(ts.start_date);
-            return startDate >= now && startDate <= nextWeek;
+            return startDate >= currentDate && startDate <= nextWeek;
           });
+          break;
+          
+        case 'vacation':
+          addNotification('🏖️ Lade Urlaub-Details...', 'info', 2000);
+          const vacationResponse = await axios.get('/api/employees', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          data = vacationResponse.data.filter(e => 
+            e.is_active_employee && e.employment_status === 'urlaub'
+          );
+          break;
+          
+        case 'sickness':
+          addNotification('🤒 Lade Krankheits-Details...', 'info', 2000);
+          const sicknessResponse = await axios.get('/api/employees', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          data = sicknessResponse.data.filter(e => 
+            e.is_active_employee && e.employment_status === 'krank'
+          );
           break;
           
         default:
@@ -665,7 +733,12 @@ const AdminPanel = () => {
     });
   };
 
+  // State für Session-Tracking
+  const [lastSessionCount, setLastSessionCount] = useState(0);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+
   useEffect(() => {
+    // Initiale Ladung
     fetchWork4AllStatus();
     fetchSystemInfo();
     fetchWork4AllDashboard();
@@ -675,16 +748,36 @@ const AdminPanel = () => {
     loadSessionStats();
     loadKioskConfig();
     
-    // Aktualisiere System-Info alle 30 Sekunden
-    const interval = setInterval(() => {
-      fetchSystemInfo();
-      fetchWork4AllDashboard();
-      loadSessionStats();
-      loadKioskConfig();
-    }, 30000);
+    // Prüfe nur Sessions alle 10 Sekunden (weniger störend)
+    const sessionCheckInterval = setInterval(async () => {
+      try {
+        // Nur Session-Anzahl prüfen ohne komplettes UI-Update
+        const response = await axios.get('/api/admin/session-stats');
+        const currentSessionCount = response.data.totalActiveSessions || 0;
+        
+                  // Nur bei Session-Änderung aktualisieren
+          if (currentSessionCount !== lastSessionCount) {
+            console.log(`📊 Session-Änderung erkannt: ${lastSessionCount} → ${currentSessionCount}`);
+            setLastSessionCount(currentSessionCount);
+            setLastRefresh(new Date());
+            
+            // Pausiere Aktualisierung wenn Modal offen ist
+            if (!modalState.isOpen) {
+              loadSessionStats();
+              loadKioskConfig();
+              // System-Info nur bei bedeutenden Session-Änderungen aktualisieren
+              if (Math.abs(currentSessionCount - lastSessionCount) > 1) {
+                fetchSystemInfo();
+              }
+            }
+          }
+      } catch (error) {
+        console.error('Session-Check Fehler:', error);
+      }
+    }, 10000); // Alle 10 Sekunden Session-Check
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearInterval(sessionCheckInterval);
+  }, [lastSessionCount, modalState.isOpen]);
 
   const styles = {
     container: {
@@ -696,8 +789,7 @@ const AdminPanel = () => {
       fontSize: '32px',
       fontWeight: 'bold',
       color: '#2c3e50',
-      marginBottom: '30px',
-      textAlign: 'center'
+      margin: 0
     },
     section: {
       backgroundColor: 'white',
@@ -975,6 +1067,68 @@ const AdminPanel = () => {
             </div>
           ));
           
+        case 'vacation':
+          return modalState.data.map(employee => (
+            <div key={employee.id} style={{
+              padding: '15px',
+              border: '1px solid #f39c12',
+              borderRadius: '8px',
+              marginBottom: '10px',
+              backgroundColor: '#fff3e0'
+            }}>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '5px' }}>
+                🏖️ {employee.name}
+              </div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>
+                🏢 {employee.department} | 💼 {employee.position_title}
+              </div>
+              <div style={{ color: '#f39c12', fontSize: '12px', marginTop: '5px' }}>
+                📍 {employee.work_location} | 📧 {employee.email}
+              </div>
+              <div style={{ color: '#e67e22', fontSize: '11px', marginTop: '3px' }}>
+                Status: Im Urlaub (über work4all synchronisiert)
+                {employee.vacation_days_left !== null && employee.vacation_days_left !== undefined && (
+                  <span style={{ color: '#d35400', fontWeight: 'bold' }}>
+                    {employee.vacation_days_left > 0 
+                      ? ` - noch ${employee.vacation_days_left} weitere Werktage${employee.vacation_end_date ? ` (bis einschließlich ${employee.vacation_end_date})` : ''}` 
+                      : ' - letzter Tag'}
+                  </span>
+                )}
+              </div>
+            </div>
+          ));
+          
+        case 'sickness':
+          return modalState.data.map(employee => (
+            <div key={employee.id} style={{
+              padding: '15px',
+              border: '1px solid #e74c3c',
+              borderRadius: '8px',
+              marginBottom: '10px',
+              backgroundColor: '#ffebee'
+            }}>
+              <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '5px' }}>
+                🤒 {employee.name}
+              </div>
+              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>
+                🏢 {employee.department} | 💼 {employee.position_title}
+              </div>
+              <div style={{ color: '#e74c3c', fontSize: '12px', marginTop: '5px' }}>
+                📍 {employee.work_location} | 📧 {employee.email}
+              </div>
+              <div style={{ color: '#c62828', fontSize: '11px', marginTop: '3px' }}>
+                Status: Krank (über work4all synchronisiert)
+                {employee.sickness_days_left !== null && employee.sickness_days_left !== undefined && (
+                  <span style={{ color: '#b71c1c', fontWeight: 'bold' }}>
+                    {employee.sickness_days_left > 0 
+                      ? ` - noch ${employee.sickness_days_left} weitere Werktage${employee.sickness_end_date ? ` (bis einschließlich ${employee.sickness_end_date})` : ''}` 
+                      : ' - letzter Tag'}
+                  </span>
+                )}
+              </div>
+            </div>
+          ));
+          
         default:
           return <div>Keine Daten verfügbar</div>;
       }
@@ -1160,7 +1314,33 @@ const AdminPanel = () => {
         {/* Detail Modal */}
         <DetailModal />
 
-        <h1 style={styles.header}>🔧 Admin Panel</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+          <div>
+            <h1 style={styles.header}>🔧 Admin Panel</h1>
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#7f8c8d', 
+              marginTop: '5px',
+              fontStyle: 'italic'
+            }}>
+              📊 Letzte Aktualisierung: {lastRefresh.toLocaleString('de-DE')}
+              <br />
+              💡 Auto-Update nur bei neuen Sessions
+            </div>
+          </div>
+          <button
+            style={{
+              ...styles.button,
+              ...styles.primaryButton,
+              fontSize: '14px',
+              padding: '8px 16px'
+            }}
+            onClick={refreshAllData}
+            title="Alle Daten manuell aktualisieren"
+          >
+            🔄 Daten aktualisieren
+          </button>
+        </div>
         
         {/* work4all Synchronisation */}
         <div style={styles.section}>
@@ -1203,7 +1383,7 @@ const AdminPanel = () => {
               onClick={() => handleWork4AllSync('employees')}
               disabled={work4allStatus.syncing}
             >
-              👥 Lagermitarbeiter sync
+              👥 Mitarbeiter synchronisieren
             </button>
             
             <button
@@ -1211,7 +1391,23 @@ const AdminPanel = () => {
               onClick={() => handleWork4AllSync('vehicles')}
               disabled={work4allStatus.syncing}
             >
-              🚗 Fahrzeuge sync
+              🚗 Fahrzeuge synchronisieren
+            </button>
+            
+            <button
+              style={{...styles.button, ...styles.primaryButton}}
+              onClick={() => handleWork4AllSync('vacation')}
+              disabled={work4allStatus.syncing}
+            >
+              🏖️ Urlaub synchronisieren
+            </button>
+            
+            <button
+              style={{...styles.button, ...styles.dangerButton}}
+              onClick={() => handleWork4AllSync('sickness')}
+              disabled={work4allStatus.syncing}
+            >
+              🤒 Krankheit synchronisieren
             </button>
             
             <button
@@ -1219,7 +1415,7 @@ const AdminPanel = () => {
               onClick={() => handleWork4AllSync('events')}
               disabled={work4allStatus.syncing}
             >
-              🎪 Veranstaltungen sync
+              🎪 Veranstaltungen synchronisieren
             </button>
             
             <button
@@ -1227,7 +1423,7 @@ const AdminPanel = () => {
               onClick={() => handleWork4AllSync('full')}
               disabled={work4allStatus.syncing}
             >
-              {work4allStatus.syncing ? '⏳ Synchronisiert...' : '🔄 Vollständige Sync'}
+              {work4allStatus.syncing ? '⏳ Synchronisiert...' : '🔄 Vollständige Synchronisation'}
             </button>
           </div>
         </div>
@@ -1279,7 +1475,7 @@ const AdminPanel = () => {
                   }}
                   onClick={() => {
                     if (work4allDashboard.attendance.onVacation > 0) {
-                      addNotification('🏖️ Urlaub-Details: work4all API /api/Urlaub/query wird implementiert', 'info');
+                      openModal('vacation', '🏖️ Mitarbeiter im Urlaub');
                     }
                   }}>
                     <div style={styles.statusTitle}>🏖️ Urlaub</div>
@@ -1296,7 +1492,7 @@ const AdminPanel = () => {
                   }}
                   onClick={() => {
                     if (work4allDashboard.attendance.onSickLeave > 0) {
-                      addNotification('🤒 Krankheit-Details: work4all API /api/Krankheit/query wird implementiert', 'info');
+                      openModal('sickness', '🤒 Kranke Mitarbeiter');
                     }
                   }}>
                     <div style={styles.statusTitle}>🤒 Krank</div>

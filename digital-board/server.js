@@ -7,6 +7,7 @@ const multer = require('multer');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
+const Work4AllSyncService = require('./work4all-sync');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -500,6 +501,60 @@ app.delete('/api/employees/:id', authenticateToken, (req, res) => {
     }
     
     res.json({ message: 'Mitarbeiter gelöscht' });
+  });
+});
+
+// BULK EDIT - Mehrfachänderung für Mitarbeiter
+app.patch('/api/employees/bulk', authenticateToken, (req, res) => {
+  const { employee_ids, updates } = req.body;
+  
+  if (!employee_ids || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+    return res.status(400).json({ error: 'Keine Mitarbeiter-IDs angegeben' });
+  }
+  
+  if (!updates || Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: 'Keine Änderungen angegeben' });
+  }
+
+  console.log('Bulk update for employees:', employee_ids, 'with updates:', updates);
+
+  // Dynamisch SET-Klausel und Parameter erstellen
+  const allowedFields = [
+    'uses_bulletin_board', 'can_drive_company_vehicles', 'driving_license_classes',
+    'license_expires', 'has_key_access', 'security_clearance_level', 
+    'work_location', 'department', 'employment_status'
+  ];
+  
+  const setClauses = [];
+  const params = [];
+  
+  Object.keys(updates).forEach(field => {
+    if (allowedFields.includes(field)) {
+      setClauses.push(`${field} = ?`);
+      params.push(updates[field]);
+    }
+  });
+  
+  if (setClauses.length === 0) {
+    return res.status(400).json({ error: 'Keine gültigen Felder zum Aktualisieren' });
+  }
+  
+  // Platzhalter für IN-Klausel
+  const placeholders = employee_ids.map(() => '?').join(',');
+  params.push(...employee_ids);
+  
+  const query = `UPDATE employees SET ${setClauses.join(', ')}, updated_at = datetime('now') WHERE id IN (${placeholders})`;
+  
+  db.run(query, params, function(err) {
+    if (err) {
+      console.error('Bulk update error:', err);
+      return res.status(500).json({ error: 'Datenbankfehler beim Bulk-Update', details: err.message });
+    }
+    
+    res.json({ 
+      message: `${this.changes} Mitarbeiter aktualisiert`,
+      updated_count: this.changes 
+    });
   });
 });
 
@@ -1457,16 +1512,34 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
     
     // Promise für alle Datenbankabfragen
     const queries = [
-      // Anwesenheit aus Mitarbeitern REALISTISCH berechnen
+      // Anwesenheit aus Mitarbeitern ECHTE Zahlen berechnen
+      new Promise((resolve) => {
+        // "Vor Ort" = nur büro und außendienst (nicht lager), keine urlaub/krank
+        db.get(`SELECT COUNT(*) as count FROM employees 
+                WHERE is_active_employee = 1 
+                AND employment_status NOT IN ('urlaub', 'krank')
+                AND work_location IN ('büro', 'außendienst')`, (err, row) => {
+          if (!err) {
+            dashboardData.attendance.currentlyOnSite = row.count || 0;
+          }
+          resolve();
+        });
+      }),
+      new Promise((resolve) => {
+        db.get(`SELECT COUNT(*) as count FROM employees 
+                WHERE is_active_employee = 1 
+                AND work_location = 'remote'`, (err, row) => {
+          if (!err) {
+            dashboardData.attendance.workingRemote = row.count || 0;
+          }
+          resolve();
+        });
+      }),
       new Promise((resolve) => {
         db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1", (err, row) => {
           if (!err) {
-            const totalEmployees = row.count || 0;
-            // Realistische Verteilung: 65% vor Ort, 15% remote, 3% krank, 2% urlaub
-            dashboardData.attendance.currentlyOnSite = Math.floor(totalEmployees * 0.65);
-            dashboardData.attendance.workingRemote = Math.floor(totalEmployees * 0.15);
-            dashboardData.workforce.workingToday = totalEmployees;
-            dashboardData.workforce.scheduledTomorrow = Math.floor(totalEmployees * 0.95); // 95% morgen da
+            dashboardData.workforce.workingToday = row.count || 0;
+            dashboardData.workforce.scheduledTomorrow = Math.floor((row.count || 0) * 0.95);
           }
           resolve();
         });
@@ -1486,13 +1559,12 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
         });
       }),
 
-      // Projekte aus ECHTEN Tradeshows ableiten
+      // Projekte aus ECHTEN Tradeshows ableiten (nur ECHTE aktive Projekte zählen)
       new Promise((resolve) => {
+        // Zähle nur tatsächlich kommende Tradeshows als aktive Projekte
         db.get("SELECT COUNT(*) as count FROM tradeshows WHERE date(start_date) >= date('now')", (err, row) => {
           if (!err) {
-            const futureTradeshows = row.count || 0;
-            // Jede Messe = ~2-3 Projekte (Vorbereitung, Teilnahme, Nachbereitung)
-            dashboardData.projects.activeProjects = Math.floor(futureTradeshows * 2.5);
+            dashboardData.projects.activeProjects = row.count || 0; // 1:1 Mapping statt Schätzung
           }
           resolve();
         });
@@ -2072,6 +2144,50 @@ app.post('/api/work4all/sync-events', authenticateToken, async (req, res) => {
   }
 });
 
+// NEUE Route: Urlaub-Synchronisation
+app.post('/api/work4all/sync-vacation', authenticateToken, async (req, res) => {
+  try {
+    console.log('🏖️ Starte Urlaub-Synchronisation...');
+    
+    // Work4All Service instanziieren
+    const work4allService = new Work4AllSyncService(db);
+    
+    const result = await work4allService.syncVacationData();
+    
+    console.log('✅ Urlaub-Synchronisation erfolgreich:', result);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Urlaub-Synchronisation fehlgeschlagen:', error);
+    res.status(500).json({ 
+      error: 'Urlaub-Synchronisation fehlgeschlagen',
+      details: error.message 
+    });
+  }
+});
+
+// NEUE Route: Krankheits-Synchronisation
+app.post('/api/work4all/sync-sickness', authenticateToken, async (req, res) => {
+  try {
+    console.log('🤒 Starte Krankheits-Synchronisation...');
+    
+    // Work4All Service instanziieren
+    const work4allService = new Work4AllSyncService(db);
+    
+    const result = await work4allService.syncSicknessData();
+    
+    console.log('✅ Krankheits-Synchronisation erfolgreich:', result);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Krankheits-Synchronisation fehlgeschlagen:', error);
+    res.status(500).json({ 
+      error: 'Krankheits-Synchronisation fehlgeschlagen',
+      details: error.message 
+    });
+  }
+});
+
 // Server starten
 app.listen(PORT, () => {
   console.log(`🚀 Erweiterter Server mit Heartbeat-System läuft auf Port ${PORT}`);
@@ -2100,6 +2216,8 @@ app.listen(PORT, () => {
   console.log(`   - POST http://localhost:${PORT}/api/work4all/sync-employees`);
   console.log(`   - POST http://localhost:${PORT}/api/work4all/sync-vehicles`);
   console.log(`   - POST http://localhost:${PORT}/api/work4all/sync-events`);
+  console.log(`   - POST http://localhost:${PORT}/api/work4all/sync-vacation`);
+  console.log(`   - POST http://localhost:${PORT}/api/work4all/sync-sickness`);
   console.log('');
   console.log('💓 Heartbeat-System:');
   console.log(`   - POST http://localhost:${PORT}/api/heartbeat`);
@@ -2346,12 +2464,12 @@ app.post('/api/heartbeat', (req, res) => {
   
   activeSessions.set(clientId, sessionData);
   
-  // Bereinige alte Sessions (älter als 5 Minuten)
-  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  // Bereinige alte Sessions (älter als 2 Minuten für bessere Aufräumung)
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
   let cleanedSessions = 0;
   for (const [id, session] of activeSessions.entries()) {
-    if (new Date(session.lastSeen) < fiveMinutesAgo) {
-      console.log(`🗑️ Entferne inaktive Session: ${id} (${session.clientType})`);
+    if (new Date(session.lastSeen) < twoMinutesAgo) {
+      console.log(`🗑️ Entferne inaktive Session: ${id} (${session.clientType}) - Inaktiv seit ${Math.floor((Date.now() - new Date(session.lastSeen)) / 1000)} Sekunden`);
       activeSessions.delete(id);
       cleanedSessions++;
     }
@@ -2469,12 +2587,39 @@ app.post('/api/sessions/end', (req, res) => {
   const { clientId } = req.body;
   
   if (activeSessions.has(clientId)) {
-    console.log(`👋 Session beendet: ${clientId}`);
+    const session = activeSessions.get(clientId);
+    console.log(`👋 Session beendet: ${clientId} (${session.clientType})`);
     activeSessions.delete(clientId);
     res.json({ success: true });
   } else {
+    console.log(`⚠️ Session-End für unbekannte Session: ${clientId}`);
     res.status(404).json({ error: 'Session nicht gefunden' });
   }
+});
+
+// Manuelle Session-Bereinigung (Admin-Endpoint)
+app.post('/api/sessions/cleanup', authenticateToken, (req, res) => {
+  const beforeCount = activeSessions.size;
+  const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000);
+  let cleanedSessions = 0;
+  
+  for (const [id, session] of activeSessions.entries()) {
+    if (new Date(session.lastSeen) < oneMinuteAgo) {
+      console.log(`🧹 Manuell bereinigt: ${id} (${session.clientType})`);
+      activeSessions.delete(id);
+      cleanedSessions++;
+    }
+  }
+  
+  console.log(`🧹 Session-Cleanup: ${cleanedSessions} von ${beforeCount} Sessions entfernt`);
+  
+  res.json({
+    success: true,
+    beforeCount,
+    afterCount: activeSessions.size,
+    cleanedSessions,
+    message: `${cleanedSessions} inaktive Sessions bereinigt`
+  });
 });
 
 // ========== ERWEITERTE SYSTEM-INFORMATIONEN MIT ECHTEN SESSION-DATEN ==========
@@ -2620,6 +2765,50 @@ app.get('/api/admin/system-info', authenticateToken, async (req, res) => {
     res.status(500).json({ 
       error: 'System-Informationen konnten nicht geladen werden',
       details: error.message 
+    });
+  }
+});
+
+// Session-Statistiken für Admin-Panel
+app.get('/api/admin/session-stats', authenticateToken, (req, res) => {
+  try {
+    console.log('📊 Session-Statistiken angefordert von:', req.user.username);
+    
+    const now = new Date();
+    const sessions = Array.from(activeSessions.values());
+    
+    // Kategorisiere Sessions
+    const activeSessions60s = sessions.filter(s => now - new Date(s.lastSeen) < 60000);
+    const activeSessions5min = sessions.filter(s => now - new Date(s.lastSeen) < 300000);
+    const kioskSessions = sessions.filter(s => s.clientType === 'kiosk');
+    const adminSessions = sessions.filter(s => s.clientType === 'admin');
+    
+    // Berechne Statistiken
+    const stats = {
+      total: sessions.length,
+      active60s: activeSessions60s.length,
+      active5min: activeSessions5min.length,
+      kiosk: kioskSessions.length,
+      admin: adminSessions.length,
+      lastUpdated: new Date().toISOString(),
+      sessions: sessions.map(s => ({
+        id: s.id,
+        clientType: s.clientType,
+        userAgent: s.userAgent,
+        lastSeen: s.lastSeen,
+        isActive: now - new Date(s.lastSeen) < 60000,
+        connectedTime: now - new Date(s.connectedAt),
+        ip: s.ip
+      }))
+    };
+    
+    res.json(stats);
+    
+  } catch (error) {
+    console.error('❌ Fehler beim Abrufen der Session-Statistiken:', error);
+    res.status(500).json({ 
+      error: 'Fehler beim Abrufen der Session-Statistiken',
+      details: error.message
     });
   }
 });

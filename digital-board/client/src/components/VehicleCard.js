@@ -161,7 +161,7 @@ const VehicleCard = ({ vehicle, onEdit, onDelete, onBook, getStatusText, statusC
     }
   };
 
-  const isAvailable = vehicle.status === 'available';
+  const isAvailable = vehicle.status === 'verfügbar';
 
   return (
     <div 

@@ -14,10 +14,19 @@ const HeartbeatManager = ({
   useEffect(() => {
     if (!enabled) return;
 
-    // Generiere eindeutige Client-ID
+    // Verwende persistente Client-ID für Browser-Session
     if (!clientId.current) {
-      clientId.current = `${clientType}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      console.log(`🆔 Neue Client-ID generiert: ${clientId.current} (Type: ${clientType})`);
+      const sessionKey = `heartbeat_client_id_${clientType}`;
+      const existingId = sessionStorage.getItem(sessionKey);
+      
+      if (existingId) {
+        clientId.current = existingId;
+        console.log(`🔄 Bestehende Client-ID wiederverwendet: ${clientId.current} (Type: ${clientType})`);
+      } else {
+        clientId.current = `${clientType}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        sessionStorage.setItem(sessionKey, clientId.current);
+        console.log(`🆔 Neue Client-ID generiert und gespeichert: ${clientId.current} (Type: ${clientType})`);
+      }
     }
 
     const sendHeartbeat = async () => {
@@ -116,7 +125,10 @@ const HeartbeatManager = ({
     const handleBeforeUnload = async () => {
       try {
         await axios.post('/api/sessions/end', { clientId: clientId.current });
-        console.log(`👋 Session beendet: ${clientId.current}`);
+        // Session-Key aus sessionStorage entfernen
+        const sessionKey = `heartbeat_client_id_${clientType}`;
+        sessionStorage.removeItem(sessionKey);
+        console.log(`👋 Session beendet und Client-ID entfernt: ${clientId.current}`);
       } catch (error) {
         console.warn('Session-End Fehler:', error.message);
       }
@@ -129,11 +141,16 @@ const HeartbeatManager = ({
       clearInterval(heartbeatInterval.current);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       
-      // Versuche Session beim Unmount zu beenden
+      // Versuche Session beim Unmount zu beenden (aber sessionStorage NICHT löschen - nur bei echtem Seitenverlassen)
       if (clientId.current) {
         axios.post('/api/sessions/end', { clientId: clientId.current })
           .then(() => console.log(`✅ Session cleanup erfolgreich: ${clientId.current}`))
-          .catch(err => console.warn('Session cleanup failed:', err.message));
+          .catch(err => {
+            // 404 ist normal wenn Session bereits beendet wurde
+            if (err.response?.status !== 404) {
+              console.warn('Session cleanup failed:', err.message);
+            }
+          });
       }
     };
   }, [clientType, currentPage, enabled, lastConfigVersion, onConfigUpdate]);

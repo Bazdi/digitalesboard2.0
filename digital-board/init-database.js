@@ -92,6 +92,9 @@ db.serialize(() => {
     security_clearance_level INTEGER DEFAULT 1,
     hire_date DATE,
     termination_date DATE,
+    work4all_code INTEGER UNIQUE,
+    work4all_nummer INTEGER,
+    work4all_last_update DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -234,7 +237,53 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 
-  console.log('✅ Alle Tabellen erstellt (inklusive Warehouse Management)');
+  // Employee Vacation Tabelle - work4all Urlaubsdaten
+  db.run(`CREATE TABLE IF NOT EXISTS employee_vacation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    employee_name TEXT NOT NULL,
+    work4all_code INTEGER,
+    work4all_vacation_code INTEGER,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    vacation_days INTEGER NOT NULL,
+    vacation_type TEXT DEFAULT 'urlaub',
+    work4all_sync_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees (id)
+  )`);
+
+  // Employee Sickness Tabelle - work4all Krankheitsdaten
+  db.run(`CREATE TABLE IF NOT EXISTS employee_sickness (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    employee_name TEXT NOT NULL,
+    work4all_code INTEGER,
+    work4all_sickness_code INTEGER,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    sickness_days INTEGER NOT NULL,
+    sickness_type TEXT DEFAULT 'krankheit',
+    work4all_sync_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees (id)
+  )`);
+
+  // work4all Synchronisation Log Tabelle
+  db.run(`CREATE TABLE IF NOT EXISTS work4all_sync_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sync_type TEXT NOT NULL,
+    sync_status TEXT NOT NULL,
+    records_processed INTEGER DEFAULT 0,
+    records_created INTEGER DEFAULT 0,
+    records_updated INTEGER DEFAULT 0,
+    records_errors INTEGER DEFAULT 0,
+    error_message TEXT,
+    sync_duration_ms INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  console.log('✅ Alle Tabellen erstellt (inklusive work4all Urlaub/Krankheit)');
 
   // Standard-Admin erstellen
   const adminPassword = bcrypt.hashSync('admin123', 10);

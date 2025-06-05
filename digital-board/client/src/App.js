@@ -251,7 +251,7 @@ function App() {
               <Route path="/admin/birthdays" element={<BirthdayList />} />
               <Route path="/admin/phonelist" element={<PhoneList />} />
               <Route path="/admin/organigramm" element={<Organigramm />} />
-              <Route path="/admin/panel" element={<AdminPanel />} />
+              <Route path="/admin/panel" element={<AdminPanel user={user} logout={logout} />} />
               <Route path="/login" element={<Navigate to="/admin" />} />
             </>
           ) : (

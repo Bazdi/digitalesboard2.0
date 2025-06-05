@@ -14,7 +14,7 @@ const getApiBaseUrl = () => {
 axios.defaults.baseURL = getApiBaseUrl();
 console.log('🌐 API Base URL:', axios.defaults.baseURL);
 
-const AdminPanel = () => {
+const AdminPanel = ({ user, logout }) => {
   const [work4allStatus, setWork4allStatus] = useState({
     lastSync: null,
     isConnected: false,
@@ -195,7 +195,12 @@ const AdminPanel = () => {
 
   const fetchWork4AllStatus = async () => {
     try {
-      const response = await axios.get('/api/work4all/status');
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Kein Token verfügbar');
+      
+      const response = await axios.get('/api/work4all/status', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setWork4allStatus(response.data);
     } catch (error) {
       console.error('work4all Status Fehler:', error);
@@ -206,7 +211,12 @@ const AdminPanel = () => {
   // NEUE Funktion für System-Informationen
   const fetchSystemInfo = async () => {
     try {
-      const response = await axios.get('/api/admin/system-info');
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('Kein Token verfügbar');
+      
+      const response = await axios.get('/api/admin/system-info', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setSystemInfo(prev => ({
         ...prev,
         ...response.data,

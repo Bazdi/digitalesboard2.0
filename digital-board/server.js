@@ -2005,12 +2005,12 @@ app.get('/api/work4all/equipment-status', authenticateToken, async (req, res) =>
       }
       
       db.all(vehicleQuery, (err, vehicles) => {
-        if (err) {
+                if (err) {
           console.error('Equipment-Status Fehler:', err);
           return res.status(500).json({ error: 'Equipment-Daten konnten nicht geladen werden' });
-        }
-      
-      const equipment = {
+                }
+        
+        const equipment = {
         meetingRooms: [
           { name: 'Konferenzraum A', status: 'Gebucht', bookedBy: 'Marketing Team', until: '14:30', capacity: 12 },
           { name: 'Konferenzraum B', status: 'Verfügbar', until: '16:00', capacity: 8 },
@@ -2033,8 +2033,9 @@ app.get('/api/work4all/equipment-status', authenticateToken, async (req, res) =>
         }))
       };
       
-      console.log('✅ Equipment-Status geladen:', equipment.vehicles.length, 'Fahrzeuge');
-      res.json(equipment);
+        console.log('✅ Equipment-Status geladen:', equipment.vehicles.length, 'Fahrzeuge');
+        res.json(equipment);
+      });
     });
     
   } catch (error) {

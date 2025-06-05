@@ -1630,17 +1630,43 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
         });
       }),
       
-      // Echte Krankheit/Urlaub-Zahlen aus employment_status
+      // Echte Krankheit/Urlaub-Zahlen AUS DEN NEUEN WORK4ALL TABELLEN (primär)
       new Promise((resolve) => {
-        db.get("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'urlaub'", (err, row) => {
-          if (!err) dashboardData.attendance.onVacation = row.count || 0;
-          resolve();
+        // Prüfe erst neue Tabellen, dann fallback auf employment_status
+        db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='employee_vacation'`, (err, row) => {
+          if (err || !row) {
+            // Fallback: alte employment_status Spalte
+            db.get("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'urlaub'", (err, row) => {
+              dashboardData.attendance.onVacation = err ? 0 : (row?.count || 0);
+              resolve();
+            });
+          } else {
+            // Neue Tabelle verwenden
+            db.get(`SELECT COUNT(DISTINCT employee_id) as count FROM employee_vacation 
+                    WHERE start_date <= date('now') AND end_date >= date('now')`, (err, row) => {
+              dashboardData.attendance.onVacation = err ? 0 : (row?.count || 0);
+              resolve();
+            });
+          }
         });
       }),
       new Promise((resolve) => {
-        db.get("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'krank'", (err, row) => {
-          if (!err) dashboardData.attendance.onSickLeave = row.count || 0;
-          resolve();
+        // Prüfe erst neue Tabellen, dann fallback auf employment_status
+        db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='employee_sickness'`, (err, row) => {
+          if (err || !row) {
+            // Fallback: alte employment_status Spalte
+            db.get("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'krank'", (err, row) => {
+              dashboardData.attendance.onSickLeave = err ? 0 : (row?.count || 0);
+              resolve();
+            });
+          } else {
+            // Neue Tabelle verwenden
+            db.get(`SELECT COUNT(DISTINCT employee_id) as count FROM employee_sickness 
+                    WHERE start_date <= date('now') AND end_date >= date('now')`, (err, row) => {
+              dashboardData.attendance.onSickLeave = err ? 0 : (row?.count || 0);
+              resolve();
+            });
+          }
         });
       }),
 
@@ -1946,23 +1972,43 @@ app.get('/api/work4all/equipment-status', authenticateToken, async (req, res) =>
   try {
     console.log('🔧 Lade Equipment-Status aus der Datenbank...');
     
-    // Fahrzeuge als Equipment verwenden
-    db.all(`
-      SELECT 
-        v.*,
-        vb.employee_name as borrower,
-        vb.end_datetime as dueBack,
-        vb.purpose
-      FROM vehicles v
-      LEFT JOIN vehicle_bookings vb ON v.id = vb.vehicle_id 
-        AND vb.status = 'aktiv' 
-        AND datetime(vb.end_datetime) > datetime('now')
-      ORDER BY v.vehicle_type, v.brand
-    `, (err, vehicles) => {
-      if (err) {
-        console.error('Equipment-Status Fehler:', err);
-        return res.status(500).json({ error: 'Equipment-Daten konnten nicht geladen werden' });
+    // Robuste Fahrzeuge-Abfrage (prüft erst auf Tabellen-Existenz)
+    db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='vehicle_bookings'`, (err, row) => {
+      const hasBookingsTable = !err && row;
+      
+      let vehicleQuery;
+      if (hasBookingsTable) {
+        // Vollständige Abfrage mit Buchungen
+        vehicleQuery = `
+          SELECT 
+            v.*,
+            vb.employee_name as borrower,
+            vb.end_datetime as dueBack,
+            vb.purpose
+          FROM vehicles v
+          LEFT JOIN vehicle_bookings vb ON v.id = vb.vehicle_id 
+            AND vb.status = 'aktiv' 
+            AND datetime(vb.end_datetime) > datetime('now')
+          ORDER BY v.vehicle_type, v.brand
+        `;
+      } else {
+        // Einfache Abfrage ohne Buchungen
+        vehicleQuery = `
+          SELECT 
+            v.*,
+            NULL as borrower,
+            NULL as dueBack,
+            NULL as purpose
+          FROM vehicles v
+          ORDER BY v.vehicle_type, v.brand
+        `;
       }
+      
+      db.all(vehicleQuery, (err, vehicles) => {
+        if (err) {
+          console.error('Equipment-Status Fehler:', err);
+          return res.status(500).json({ error: 'Equipment-Daten konnten nicht geladen werden' });
+        }
       
       const equipment = {
         meetingRooms: [

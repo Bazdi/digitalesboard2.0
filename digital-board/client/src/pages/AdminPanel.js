@@ -346,7 +346,7 @@ const AdminPanel = ({ user, logout }) => {
     const stepDuration = duration / steps.length;
 
     const interval = setInterval(() => {
-      if (currentStep < steps.length) {
+      if (currentStep < steps.length && steps[currentStep]) {
         setSyncProgress(prev => ({
           ...prev,
           progress: steps[currentStep].progress,

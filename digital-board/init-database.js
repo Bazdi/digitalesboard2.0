@@ -1,6 +1,7 @@
 // init-database.js - DEUTSCHE VERSION mit übersetzten Werten
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
+const { spawn } = require('child_process');
 
 const db = new sqlite3.Database('./database.db');
 
@@ -44,7 +45,7 @@ db.serialize(() => {
     FOREIGN KEY (author_id) REFERENCES users (id)
   )`);
 
-  // Trade Shows Tabelle
+  // Trade Shows Tabelle MIT work4all Integration
   db.run(`CREATE TABLE IF NOT EXISTS tradeshows (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -53,6 +54,10 @@ db.serialize(() => {
     end_date DATE NOT NULL,
     description TEXT,
     image TEXT,
+    work4all_project_code INTEGER,
+    work4all_project_number TEXT,
+    work4all_group_code INTEGER,
+    work4all_last_update DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -139,7 +144,7 @@ db.serialize(() => {
     FOREIGN KEY (parent_id) REFERENCES organization_chart (id)
   )`);
 
-  // Fahrzeuge Tabelle
+  // Fahrzeuge Tabelle MIT work4all Integration
   db.run(`CREATE TABLE IF NOT EXISTS vehicles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     brand TEXT NOT NULL,
@@ -158,6 +163,9 @@ db.serialize(() => {
     tuv_expires DATE,
     image TEXT,
     notes TEXT,
+    work4all_resource_code INTEGER,
+    work4all_resource_name TEXT,
+    work4all_last_update DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
@@ -237,7 +245,7 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 
-  // Employee Vacation Tabelle - work4all Urlaubsdaten
+  // Employee Vacation Tabelle - work4all Urlaubsdaten MIT Urlaubsart-Codes
   db.run(`CREATE TABLE IF NOT EXISTS employee_vacation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
@@ -248,12 +256,14 @@ db.serialize(() => {
     end_date DATE NOT NULL,
     vacation_days INTEGER NOT NULL,
     vacation_type TEXT DEFAULT 'urlaub',
+    vacation_art_code INTEGER DEFAULT 0,
+    vacation_art_description TEXT DEFAULT 'Urlaub',
     work4all_sync_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (employee_id) REFERENCES employees (id)
   )`);
 
-  // Employee Sickness Tabelle - work4all Krankheitsdaten
+  // Employee Sickness Tabelle - work4all Krankheitsdaten MIT Erweiterungen
   db.run(`CREATE TABLE IF NOT EXISTS employee_sickness (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     employee_id INTEGER NOT NULL,
@@ -264,6 +274,8 @@ db.serialize(() => {
     end_date DATE NOT NULL,
     sickness_days INTEGER NOT NULL,
     sickness_type TEXT DEFAULT 'krankheit',
+    sickness_art_code INTEGER DEFAULT 0,
+    sickness_art_description TEXT DEFAULT 'Krankheit',
     work4all_sync_date DATETIME DEFAULT CURRENT_TIMESTAMP,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (employee_id) REFERENCES employees (id)
@@ -284,6 +296,112 @@ db.serialize(() => {
   )`);
 
   console.log('✅ Alle Tabellen erstellt (inklusive work4all Urlaub/Krankheit)');
+  
+  // 📋 FÜGE FEHLENDE SPALTEN ZU BESTEHENDEN TABELLEN HINZU
+  console.log('🔧 Füge fehlende work4all-Spalten zu bestehenden Tabellen hinzu...');
+  
+  // Füge vacation_art_code und vacation_art_description zu employee_vacation hinzu
+  db.run(`ALTER TABLE employee_vacation ADD COLUMN vacation_art_code INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ vacation_art_code bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ vacation_art_code hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE employee_vacation ADD COLUMN vacation_art_description TEXT DEFAULT 'Urlaub'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ vacation_art_description bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ vacation_art_description hinzugefügt');
+    }
+  });
+
+  // Füge sickness_art_code und sickness_art_description zu employee_sickness hinzu
+  db.run(`ALTER TABLE employee_sickness ADD COLUMN sickness_art_code INTEGER DEFAULT 0`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ sickness_art_code bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ sickness_art_code hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE employee_sickness ADD COLUMN sickness_art_description TEXT DEFAULT 'Krankheit'`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ sickness_art_description bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ sickness_art_description hinzugefügt');
+    }
+  });
+
+  // Füge work4all Spalten zu tradeshows hinzu
+  db.run(`ALTER TABLE tradeshows ADD COLUMN work4all_project_code INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_project_code bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_project_code hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE tradeshows ADD COLUMN work4all_project_number TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_project_number bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_project_number hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE tradeshows ADD COLUMN work4all_group_code INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_group_code bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_group_code hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE tradeshows ADD COLUMN work4all_last_update DATETIME`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_last_update bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_last_update hinzugefügt');
+    }
+  });
+
+  // Füge work4all Spalten zu vehicles hinzu (falls nicht vorhanden)
+  db.run(`ALTER TABLE vehicles ADD COLUMN work4all_resource_code INTEGER`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_resource_code bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_resource_code hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE vehicles ADD COLUMN work4all_resource_name TEXT`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_resource_name bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_resource_name hinzugefügt');
+    }
+  });
+  
+  db.run(`ALTER TABLE vehicles ADD COLUMN work4all_last_update DATETIME`, (err) => {
+    if (err && !err.message.includes('duplicate column name')) {
+      console.log('⚠️ work4all_last_update bereits vorhanden oder Fehler:', err.message);
+    } else if (!err) {
+      console.log('✅ work4all_last_update hinzugefügt');
+    }
+  });
+  
+  // Erstelle Indizes für work4all Performance
+  db.run(`CREATE INDEX IF NOT EXISTS idx_employees_work4all_code ON employees(work4all_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_vehicles_work4all_resource_code ON vehicles(work4all_resource_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_tradeshows_work4all_project_code ON tradeshows(work4all_project_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_employee_vacation_dates ON employee_vacation(start_date, end_date)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_employee_vacation_art_code ON employee_vacation(vacation_art_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_dates ON employee_sickness(start_date, end_date)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_art_code ON employee_sickness(sickness_art_code)`);
+  
+  console.log('✅ work4all Performance-Indizes erstellt');
 
   // Standard-Admin erstellen
   const adminPassword = bcrypt.hashSync('admin123', 10);
@@ -372,6 +490,7 @@ db.serialize(() => {
 db.close((err) => {
   if (err) {
     console.error('Fehler beim Schließen der Datenbank:', err.message);
+    process.exit(1);
   } else {
     console.log('✅ Datenbank erfolgreich für work4all vorbereitet!');
     console.log('');
@@ -382,11 +501,11 @@ db.close((err) => {
     console.log('   🎯 Arbeitsplan und Fahrzeugbuchungen nutzen work4all Mitarbeiter');
     console.log('');
     console.log('📞 KONTAKT-SYSTEM:');
-    console.log('   🆘 7 Externe Kontakte (Notfall, Kunden, Lieferanten)');
+    console.log('   🆘 3 Externe Kontakte (Notfall-Kontakte)');
     console.log('   🏷️ Kategorisierung: extern/Notfall/Service/Partner');
     console.log('');
     console.log('🚗 FAHRZEUGVERWALTUNG:');
-    console.log('   🚛 4 Firmenwagen verfügbar');
+    console.log('   🚛 Fahrzeuge werden aus work4all importiert');
     console.log('   📋 Buchungen werden nach work4all Sync mit Mitarbeitern verknüpft');
     console.log('');
     console.log('📦 WAREHOUSE MANAGEMENT:');
@@ -394,13 +513,53 @@ db.close((err) => {
     console.log('   📋 10 Artikel in verschiedenen Kategorien');
     console.log('   📊 7 Beispiel-Bewegungen (Zugang/Abgang, Umlagerung, Korrektur)');
     console.log('');
-    console.log('🚀 NÄCHSTE SCHRITTE:');
-    console.log('   1. Server starten: node server.js');
-    console.log('   2. work4all Synchronisation testen: node test-work4all.js');
-    console.log('   3. Vollständige Synchronisation: node test-work4all.js --sync');
+    console.log('🚀 STARTE AUTOMATISCHE work4all SYNCHRONISATION...');
     console.log('');
-    console.log('Standard Admin-Login:');
-    console.log('Benutzername: admin');
-    console.log('Passwort: admin123');
+    
+    // 🚀 AUTOMATISCHE work4all SYNCHRONISATION
+    console.log('⏰ Warte 2 Sekunden für Datenbankstabilität...');
+    setTimeout(() => {
+      console.log('🔄 Führe vollständige work4all Synchronisation aus...');
+      
+      const syncProcess = spawn('node', ['test-work4all.js', '--sync'], {
+        stdio: 'inherit',
+        cwd: __dirname
+      });
+      
+      syncProcess.on('close', (code) => {
+        if (code === 0) {
+          console.log('');
+          console.log('🎉 SETUP VOLLSTÄNDIG ABGESCHLOSSEN!');
+          console.log('');
+          console.log('✅ Datenbank erstellt und erweitert');
+          console.log('✅ work4all Synchronisation erfolgreich');
+          console.log('✅ Alle Mitarbeiter, Fahrzeuge und Events importiert');
+          console.log('');
+          console.log('🚀 NÄCHSTE SCHRITTE:');
+          console.log('   1. Server starten: node server.js oder pm2 start server.js --name backend');
+          console.log('   2. Frontend bauen: cd client && npm run build');
+          console.log('   3. Web-Interface öffnen: http://localhost:3001');
+          console.log('');
+          console.log('Standard Admin-Login:');
+          console.log('Benutzername: admin');
+          console.log('Passwort: admin123');
+        } else {
+          console.log('');
+          console.log('⚠️ work4all Synchronisation beendet mit Code:', code);
+          console.log('Datenbank ist trotzdem bereit - Server kann gestartet werden');
+          console.log('');
+          console.log('Manual sync später möglich mit: node test-work4all.js --sync');
+        }
+      });
+      
+      syncProcess.on('error', (err) => {
+        console.log('');
+        console.log('❌ Fehler bei work4all Synchronisation:', err.message);
+        console.log('Datenbank ist trotzdem bereit - Server kann gestartet werden');
+        console.log('');
+        console.log('Manual sync später möglich mit: node test-work4all.js --sync');
+      });
+      
+    }, 2000);
   }
 });

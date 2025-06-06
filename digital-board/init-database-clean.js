@@ -1,4 +1,4 @@
-// init-database.js - DEUTSCHE VERSION mit übersetzten Werten - FIXED VERSION
+// init-database-clean.js - SAUBERE VERSION ohne Duplikate
 const sqlite3 = require('sqlite3').verbose();
 const bcrypt = require('bcryptjs');
 const { spawn } = require('child_process');
@@ -19,9 +19,9 @@ function createTableWithCallback(sql, tableName, callback) {
   });
 }
 
-// Erstelle Tabellen sequenziell mit robuster Fehlerbehandlung
+// Erstelle Tabellen sequenziell
 db.serialize(() => {
-  console.log('📋 Erstelle alle Tabellen mit vollständigen work4all-Spalten...');
+  console.log('📋 Erstelle alle Tabellen...');
 
   // 1. Users Tabelle
   createTableWithCallback(`CREATE TABLE IF NOT EXISTS users (
@@ -309,9 +309,10 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`, 'warehouse_movements');
 
-  console.log('✅ Alle Tabellen erstellt mit vollständigen work4all-Spalten');
+  console.log('✅ Alle Tabellen erstellt');
   
-  // Erstelle Indizes für work4all Performance
+  // Erstelle Performance-Indizes
+  console.log('📊 Erstelle Performance-Indizes...');
   db.run(`CREATE INDEX IF NOT EXISTS idx_employees_work4all_code ON employees(work4all_code)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_vehicles_work4all_resource_code ON vehicles(work4all_resource_code)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_tradeshows_work4all_project_code ON tradeshows(work4all_project_code)`);
@@ -319,124 +320,146 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_vacation_art_code ON employee_vacation(vacation_art_code)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_dates ON employee_sickness(start_date, end_date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_art_code ON employee_sickness(sickness_art_code)`);
-  
-  console.log('✅ work4all Performance-Indizes erstellt');
+  console.log('✅ Alle Indizes erstellt');
 
   // Standard-Admin erstellen
+  console.log('👤 Erstelle Standard-Admin...');
   const adminPassword = bcrypt.hashSync('admin123', 10);
   db.run(`INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)`, 
-    ['admin', adminPassword, 'admin']);
+    ['admin', adminPassword, 'admin'], (err) => {
+      if (err) {
+        console.log('❌ Fehler beim Admin erstellen:', err.message);
+      } else {
+        console.log('✅ Admin-User erstellt (admin/admin123)');
+      }
+    });
 
   // Beispiel Posts
+  console.log('📝 Erstelle Beispiel-Posts...');
   db.run(`INSERT OR IGNORE INTO posts (id, title, content, author_id) VALUES 
     (1, 'Willkommen zum Digitalen Schwarzen Brett', 'Dies ist unser neues digitales Schwarzes Brett für alle wichtigen Informationen und Ankündigungen.', 1),
     (2, 'Neue Kaffeemaschine im Aufenthaltsraum', 'Ab sofort steht eine neue Kaffeemaschine im Aufenthaltsraum zur Verfügung. Bitte behandelt sie pfleglich!', 1),
-    (3, 'Parkplatz-Regelung', 'Bitte beachtet die neue Parkplatz-Regelung. Die Parkplätze 1-10 sind für Gäste reserviert.', 1)`);
+    (3, 'Parkplatz-Regelung', 'Bitte beachtet die neue Parkplatz-Regelung. Die Parkplätze 1-10 sind für Gäste reserviert.', 1)`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Posts:', err.message);
+      } else {
+        console.log('✅ Beispiel-Posts erstellt');
+      }
+    });
 
   // Beispiel News
+  console.log('📰 Erstelle Beispiel-News...');
   db.run(`INSERT OR IGNORE INTO news (id, title, content, summary, category, priority, is_breaking, author_id) VALUES 
     (1, 'Quartalszahlen Q1 2025 veröffentlicht', 'Unsere Quartalszahlen für Q1 2025 zeigen ein starkes Wachstum von 15% gegenüber dem Vorjahresquartal.', 'Q1 2025: +15% Wachstum', 'Finanzen', 3, 1, 1),
-    (2, 'Neue Partnerschaft mit TechCorp AG', 'Strategische Partnerschaft stärkt unsere Position im KI-Bereich.', 'Partnerschaft mit TechCorp AG', 'Unternehmen', 2, 0, 1)`);
+    (2, 'Neue Partnerschaft mit TechCorp AG', 'Strategische Partnerschaft stärkt unsere Position im KI-Bereich.', 'Partnerschaft mit TechCorp AG', 'Unternehmen', 2, 0, 1)`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei News:', err.message);
+      } else {
+        console.log('✅ Beispiel-News erstellt');
+      }
+    });
 
   // Beispiel Trade Shows
+  console.log('🎪 Erstelle Beispiel-Messen...');
   db.run(`INSERT OR IGNORE INTO tradeshows (id, name, location, start_date, end_date, description) VALUES 
     (1, 'CeBIT 2025', 'Hannover', '2025-06-15', '2025-06-19', 'Digitale Business Messe'),
-    (2, 'IFA 2025', 'Berlin', '2025-09-01', '2025-09-06', 'Consumer Electronics Messe')`);
+    (2, 'IFA 2025', 'Berlin', '2025-09-01', '2025-09-06', 'Consumer Electronics Messe')`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Tradeshows:', err.message);
+      } else {
+        console.log('✅ Beispiel-Messen erstellt');
+      }
+    });
 
-  console.log('🔄 Mitarbeiterdatenbank für work4all vorbereitet...');
-  
-  // Lösche alle Mitarbeiter - diese kommen jetzt aus work4all
-  db.run(`DELETE FROM employees`);
-  
-  console.log('Erstelle externe Kontakte...');
-  
-  db.run(`INSERT INTO contacts (id, name, company, position_title, phone, mobile, email, contact_type, category, is_emergency_contact) VALUES 
+  // Notfall-Kontakte
+  console.log('🆘 Erstelle Notfall-Kontakte...');
+  db.run(`INSERT OR IGNORE INTO contacts (id, name, company, position_title, phone, mobile, email, contact_type, category, is_emergency_contact) VALUES 
     (1, 'Notarzt', 'Klinikum', 'Notdienst', '112', NULL, 'notarzt@klinikum.de', 'notfall', 'Notfall', 1),
     (2, 'Feuerwehr', 'Stadt', 'Einsatzleitung', '112', NULL, NULL, 'notfall', 'Notfall', 1),
-    (3, 'Polizei', 'Polizeipräsidium', 'Notruf', '110', NULL, NULL, 'notfall', 'Notfall', 1)`);
-
-  console.log('✅ Nur Notfall-Kontakte erstellt - externe Kontakte kommen aus work4all');
-
-  // Organisation Chart - leeren, wird später mit work4all Daten gefüllt
-  db.run(`DELETE FROM organization_chart`);
-
-  // Fahrzeuge - leeren, kommen aus work4all
-  console.log('🔄 Fahrzeugdatenbank für work4all vorbereitet...');
-  db.run(`DELETE FROM vehicles`);
-  console.log('✅ Fahrzeuge werden aus work4all importiert');
-
-  console.log('Erstelle Fahrzeugbuchungen (ohne Mitarbeiterzuordnung)...');
-  
-  // Fahrzeugbuchungen leeren - werden später mit work4all Mitarbeitern erstellt
-  db.run(`DELETE FROM vehicle_bookings`);
-
-  // Arbeitsplan - leeren, wird später mit work4all Mitarbeitern gefüllt
-  db.run(`DELETE FROM workplan_tasks`);
+    (3, 'Polizei', 'Polizeipräsidium', 'Notruf', '110', NULL, NULL, 'notfall', 'Notfall', 1)`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Kontakten:', err.message);
+      } else {
+        console.log('✅ Notfall-Kontakte erstellt');
+      }
+    });
 
   // Warehouse Areas
+  console.log('🏢 Erstelle Lagerbereiche...');
   db.run(`INSERT OR IGNORE INTO warehouse_areas (id, name, description, x_position, y_position, width, height, color, area_type, capacity) VALUES 
     (1, 'Hauptlager A', 'Großes Hauptlager für Fertigwaren', 50, 50, 200, 150, '#3498db', 'lager', 1000),
     (2, 'Rohstofflager B', 'Lager für Rohstoffe und Materialien', 300, 50, 150, 100, '#27ae60', 'lager', 500),
     (3, 'Verladezone', 'Be- und Entladung von LKW', 500, 200, 200, 100, '#e74c3c', 'verladung', 0),
     (4, 'Büro Lagerleitung', 'Büro des Lagerleiters', 150, 250, 100, 80, '#9b59b6', 'büro', 0),
     (5, 'Hauptgang', 'Zentraler Transportweg', 200, 150, 300, 50, '#95a5a6', 'gang', 0),
-    (6, 'Kühlbereich', 'Temperaturkontrolliertes Lager', 600, 50, 120, 120, '#3498db', 'kühlung', 200)`);
+    (6, 'Kühlbereich', 'Temperaturkontrolliertes Lager', 600, 50, 120, 120, '#3498db', 'kühlung', 200)`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Warehouse Areas:', err.message);
+      } else {
+        console.log('✅ Lagerbereiche erstellt');
+      }
+    });
 
   // Warehouse Items
+  console.log('📦 Erstelle Warehouse Items...');
   db.run(`INSERT OR IGNORE INTO warehouse_items (id, name, description, sku, area_id, quantity, unit, category, min_stock, max_stock, supplier, notes) VALUES 
     (1, 'Schrauben M8x20', 'Sechskantschrauben verzinkt', 'SCH-M8-20', 1, 2500, 'Stück', 'Befestigung', 1000, 5000, 'Schrauben AG', 'Standard Befestigung'),
     (2, 'Aluminium Profil 40x40', 'Standard Konstruktionsprofil', 'ALU-40-40', 2, 45, 'Meter', 'Rohstoffe', 20, 100, 'Alu Works GmbH', '6m Stangen'),
     (3, 'Elektronikgehäuse Typ A', 'Kunststoffgehäuse schwarz', 'GEH-ELEK-A', 1, 127, 'Stück', 'Verpackung', 50, 300, 'Plastics Ltd', 'IP65 Schutzart'),
     (4, 'Kabel 3x1,5mm²', 'Installationskabel H07V-U', 'KAB-3X15', 2, 850, 'Meter', 'Elektro', 200, 1000, 'Elektro Express', 'Schwarz, 100m Rollen'),
-    (5, 'Dichtung Gummi 5mm', 'EPDM Gummidichtung', 'DICHT-5', 1, 25, 'Meter', 'Ersatzteile', 10, 50, 'Rubber Solutions', 'Temperaturbeständig'),
-    (6, 'Kühlpack Gel 200g', 'Wiederverwendbare Kühlpacks', 'KÜHL-200', 6, 150, 'Stück', 'Verpackung', 100, 500, 'Cool Logistics', 'Für Lebensmitteltransport'),
-    (7, 'Transportbox 60L', 'Stapelbare Kunststoffbox', 'BOX-60L', 1, 35, 'Stück', 'Verpackung', 20, 100, 'Box Solutions', 'Mit Deckel'),
-    (8, 'Hydrauliköl ISO 32', 'Hydraulikflüssigkeit', 'HYD-ISO32', 2, 12, 'Kanister', 'Chemie', 5, 30, 'Oil Technologies', '20L Kanister'),
-    (9, 'Lager 6203-2RS', 'Kugellager geschlossen', 'LAG-6203', 1, 87, 'Stück', 'Ersatzteile', 50, 200, 'Bearing World', 'Standard Industrielager'),
-    (10, 'Etiketten 50x30mm', 'Thermo-Transfer Etiketten', 'ETI-50-30', 1, 2800, 'Stück', 'Verpackung', 1000, 5000, 'Label Pro', '1000er Rolle')`);
+    (5, 'Dichtung Gummi 5mm', 'EPDM Gummidichtung', 'DICHT-5', 1, 25, 'Meter', 'Ersatzteile', 10, 50, 'Rubber Solutions', 'Temperaturbeständig')`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Warehouse Items:', err.message);
+      } else {
+        console.log('✅ Warehouse Items erstellt');
+      }
+    });
 
   // Warehouse Movements
+  console.log('📊 Erstelle Warehouse Movements...');
   db.run(`INSERT OR IGNORE INTO warehouse_movements (id, item_id, area_id, movement_type, quantity, reference_number, reason, user_id, created_at) VALUES 
     (1, 1, 1, 'zugang', 1000, 'LF-2024-001', 'Wareneingang vom Lieferanten', 1, datetime('now', '-7 days')),
     (2, 2, 2, 'zugang', 50, 'LF-2024-002', 'Materiallieferung', 1, datetime('now', '-5 days')),
-    (3, 3, 1, 'abgang', 25, 'AU-2024-015', 'Kundenauftrag KD-2024-015', 1, datetime('now', '-3 days')),
-    (4, 1, 1, 'abgang', 500, 'AU-2024-016', 'Große Kundenbestellung', 1, datetime('now', '-2 days')),
-    (5, 4, 2, 'zugang', 200, 'LF-2024-003', 'Kabellieferung', 1, datetime('now', '-1 day')),
-    (6, 5, 1, 'korrektur', 20, 'INV-2024-05', 'Inventur Korrektur - Schwund', 1, datetime('now')),
-    (7, 6, 6, 'umlagerung', 50, 'UM-001', 'Umlagerung in Kühlbereich', 1, datetime('now'))`);
+    (3, 3, 1, 'abgang', 25, 'AU-2024-015', 'Kundenauftrag KD-2024-015', 1, datetime('now', '-3 days'))`, (err) => {
+      if (err) {
+        console.log('❌ Fehler bei Warehouse Movements:', err.message);
+      } else {
+        console.log('✅ Warehouse Movements erstellt');
+      }
+    });
+
+  console.log('');
+  console.log('🔄 Lösche alte Daten für work4all Import...');
+  
+  // Lösche alte Daten die aus work4all kommen
+  db.run(`DELETE FROM employees WHERE work4all_code IS NOT NULL`);
+  db.run(`DELETE FROM vehicles WHERE work4all_resource_code IS NOT NULL`);
+  db.run(`DELETE FROM organization_chart`);
+  db.run(`DELETE FROM vehicle_bookings`);
+  db.run(`DELETE FROM workplan_tasks`);
+  db.run(`DELETE FROM employee_vacation`);
+  db.run(`DELETE FROM employee_sickness`);
 });
 
 db.close((err) => {
   if (err) {
-    console.error('Fehler beim Schließen der Datenbank:', err.message);
+    console.error('❌ Fehler beim Schließen der Datenbank:', err.message);
     process.exit(1);
   } else {
-    console.log('✅ Datenbank erfolgreich für work4all vorbereitet!');
     console.log('');
-    console.log('🔄 WORK4ALL INTEGRATION:');
-    console.log('📊 Mitarbeiterdatenbank bereit für work4all Synchronisation');
-    console.log('   🔄 Mitarbeiter werden automatisch aus work4all importiert');
-    console.log('   📋 Führe work4all Synchronisation aus für Mitarbeiterdaten');
-    console.log('   🎯 Arbeitsplan und Fahrzeugbuchungen nutzen work4all Mitarbeiter');
+    console.log('✅ DATENBANK SETUP ABGESCHLOSSEN!');
     console.log('');
-    console.log('📞 KONTAKT-SYSTEM:');
-    console.log('   🆘 3 Externe Kontakte (Notfall-Kontakte)');
-    console.log('   🏷️ Kategorisierung: extern/Notfall/Service/Partner');
-    console.log('');
-    console.log('🚗 FAHRZEUGVERWALTUNG:');
-    console.log('   🚛 Fahrzeuge werden aus work4all importiert');
-    console.log('   📋 Buchungen werden nach work4all Sync mit Mitarbeitern verknüpft');
-    console.log('');
-    console.log('📦 WAREHOUSE MANAGEMENT:');
-    console.log('   🏢 6 Lagerbereiche (Hauptlager, Rohstoffe, Verladung, Büro, Gang, Kühlbereich)');
-    console.log('   📋 10 Artikel in verschiedenen Kategorien');
-    console.log('   📊 7 Beispiel-Bewegungen (Zugang/Abgang, Umlagerung, Korrektur)');
+    console.log('📊 ERSTELLT:');
+    console.log('   ✅ 16 Tabellen mit vollständigen work4all-Spalten');
+    console.log('   ✅ Performance-Indizes');
+    console.log('   ✅ Standard-Admin (admin/admin123)');
+    console.log('   ✅ Beispieldaten (Posts, News, Warehouse)');
+    console.log('   ✅ Notfall-Kontakte');
     console.log('');
     console.log('🚀 STARTE AUTOMATISCHE work4all SYNCHRONISATION...');
     console.log('');
     
-    // 🚀 AUTOMATISCHE work4all SYNCHRONISATION
-    console.log('⏰ Warte 2 Sekunden für Datenbankstabilität...');
+    // Automatische work4all Synchronisation
     setTimeout(() => {
       console.log('🔄 Führe vollständige work4all Synchronisation aus...');
       
@@ -446,39 +469,34 @@ db.close((err) => {
       });
       
       syncProcess.on('close', (code) => {
+        console.log('');
         if (code === 0) {
-          console.log('');
           console.log('🎉 SETUP VOLLSTÄNDIG ABGESCHLOSSEN!');
           console.log('');
-          console.log('✅ Datenbank erstellt und erweitert');
+          console.log('✅ Datenbank korrekt erstellt');
           console.log('✅ work4all Synchronisation erfolgreich');
           console.log('✅ Alle Mitarbeiter, Fahrzeuge und Events importiert');
           console.log('');
           console.log('🚀 NÄCHSTE SCHRITTE:');
           console.log('   1. Server starten: node server.js oder pm2 start server.js --name backend');
           console.log('   2. Frontend bauen: cd client && npm run build');
-          console.log('   3. Web-Interface öffnen: http://localhost:3001');
+          console.log('   3. Web-Interface: http://localhost:3001');
           console.log('');
-          console.log('Standard Admin-Login:');
-          console.log('Benutzername: admin');
-          console.log('Passwort: admin123');
+          console.log('🔐 Admin-Login: admin / admin123');
         } else {
-          console.log('');
-          console.log('⚠️ work4all Synchronisation beendet mit Code:', code);
+          console.log('⚠️ work4all Synchronisation mit Code beendet:', code);
           console.log('Datenbank ist trotzdem bereit - Server kann gestartet werden');
-          console.log('');
-          console.log('Manual sync später möglich mit: node test-work4all.js --sync');
+          console.log('Manual sync möglich: node test-work4all.js --sync');
         }
       });
       
       syncProcess.on('error', (err) => {
         console.log('');
         console.log('❌ Fehler bei work4all Synchronisation:', err.message);
-        console.log('Datenbank ist trotzdem bereit - Server kann gestartet werden');
-        console.log('');
-        console.log('Manual sync später möglich mit: node test-work4all.js --sync');
+        console.log('Datenbank ist bereit - Server kann gestartet werden');
+        console.log('Manual sync möglich: node test-work4all.js --sync');
       });
       
     }, 2000);
   }
-});
+}); 

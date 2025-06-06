@@ -112,6 +112,29 @@ const PhoneList = ({ kiosk = false }) => {
     }
   };
 
+  // Hilfsfunktion für tel: Links
+  const renderPhoneLink = (phoneNumber, displayText) => {
+    if (!phoneNumber) return displayText || 'Keine Nummer';
+    
+    // Formatiere Telefonnummer für tel: Link (entferne Leerzeichen und andere Zeichen)
+    const cleanPhone = phoneNumber.replace(/\s+/g, '').replace(/[^\d+]/g, '');
+    
+    return (
+      <a 
+        href={`tel:${cleanPhone}`}
+        style={{
+          color: '#3498db',
+          textDecoration: 'none',
+          cursor: 'pointer'
+        }}
+        onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
+        onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+      >
+        {displayText || phoneNumber}
+      </a>
+    );
+  };
+
   const filteredData = getFilteredEmployees();
   
   const groupedData = filteredData.reduce((groups, person) => {
@@ -348,19 +371,19 @@ const PhoneList = ({ kiosk = false }) => {
                     {person.phone && (
                       <div style={styles.contactItem}>
                         <span style={styles.contactIcon}>📱</span>
-                        <span style={styles.contactText}>{person.phone}</span>
+                        <span style={styles.contactText}>{renderPhoneLink(person.phone, person.phone)}</span>
                       </div>
                     )}
                     {person.extension && (
                       <div style={styles.contactItem}>
                         <span style={styles.contactIcon}>☎️</span>
-                        <span style={styles.contactText}>Durchwahl: {person.extension}</span>
+                        <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension)}</span>
                       </div>
                     )}
                     {person.mobile && person.mobile !== person.phone && (
                       <div style={styles.contactItem}>
                         <span style={styles.contactIcon}>📲</span>
-                        <span style={styles.contactText}>Mobil: {person.mobile}</span>
+                        <span style={styles.contactText}>Mobil: {renderPhoneLink(person.mobile, person.mobile)}</span>
                       </div>
                     )}
                     {person.email && (
@@ -500,19 +523,19 @@ const PhoneList = ({ kiosk = false }) => {
                   {person.phone && (
                     <div style={styles.contactItem}>
                       <span style={styles.contactIcon}>📱</span>
-                      <span style={styles.contactText}>{person.phone}</span>
+                      <span style={styles.contactText}>{renderPhoneLink(person.phone, person.phone)}</span>
                     </div>
                   )}
                   {person.extension && (
                     <div style={styles.contactItem}>
                       <span style={styles.contactIcon}>☎️</span>
-                      <span style={styles.contactText}>Durchwahl: {person.extension}</span>
+                      <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension)}</span>
                     </div>
                   )}
                   {person.mobile && person.mobile !== person.phone && (
                     <div style={styles.contactItem}>
                       <span style={styles.contactIcon}>📲</span>
-                      <span style={styles.contactText}>Mobil: {person.mobile}</span>
+                      <span style={styles.contactText}>Mobil: {renderPhoneLink(person.mobile, person.mobile)}</span>
                     </div>
                   )}
                   {person.email && (

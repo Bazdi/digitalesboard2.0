@@ -743,41 +743,53 @@ const VehicleManagement = () => {
               👥 Mitarbeiter-Führerscheine verwalten
             </h3>
             <div style={{ display: 'grid', gap: '15px' }}>
-              {employees.map(employee => (
-                <div key={employee.id} style={{
-                  padding: '20px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '10px',
-                  border: '2px solid #ecf0f1',
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h4 style={{ margin: '0 0 5px 0', color: '#2c3e50' }}>
-                        {getDepartmentIcon(employee.department)} {employee.name}
-                      </h4>
-                      <p style={{ margin: '0', color: '#7f8c8d', fontSize: '14px' }}>
-                        {employee.department} • {employee.phone || 'Keine Telefonnummer'}
-                      </p>
-                      {employee.driving_license_classes && (
-                        <p style={{ margin: '5px 0 0 0', color: '#27ae60', fontSize: '14px' }}>
-                          🚗 Führerschein: {employee.driving_license_classes}
-                          {employee.license_expires && ` (gültig bis ${new Date(employee.license_expires).toLocaleDateString('de-DE')})`}
+              {employees
+                .filter(employee => 
+                  // Nur aktive Mitarbeiter anzeigen
+                  employee.is_active_employee && 
+                  // Keine gekündigten Mitarbeiter
+                  employee.employment_status !== 'gekündigt' &&
+                  // Keine ausgeschiedenen Mitarbeiter
+                  employee.employment_status !== 'ausgeschieden' &&
+                  // Keine "Sonstige" Gruppe
+                  employee.department !== 'Sonstige' &&
+                  employee.department !== 'sonstige'
+                )
+                .map(employee => (
+                  <div key={employee.id} style={{
+                    padding: '20px',
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '10px',
+                    border: '2px solid #ecf0f1',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4 style={{ margin: '0 0 5px 0', color: '#2c3e50' }}>
+                          {getDepartmentIcon(employee.department)} {employee.name}
+                        </h4>
+                        <p style={{ margin: '0', color: '#7f8c8d', fontSize: '14px' }}>
+                          {employee.department} • {employee.phone || 'Keine Telefonnummer'}
                         </p>
-                      )}
+                        {employee.driving_license_classes && (
+                          <p style={{ margin: '5px 0 0 0', color: '#27ae60', fontSize: '14px' }}>
+                            🚗 Führerschein: {employee.driving_license_classes}
+                            {employee.license_expires && ` (gültig bis ${new Date(employee.license_expires).toLocaleDateString('de-DE')})`}
+                          </p>
+                        )}
+                      </div>
+                      <span style={{
+                        padding: '6px 12px',
+                        borderRadius: '15px',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        backgroundColor: employee.can_drive_company_vehicles ? '#27ae60' : '#e74c3c',
+                        color: 'white'
+                      }}>
+                        {employee.can_drive_company_vehicles ? '✅ Fahrberechtigt' : '❌ Nicht berechtigt'}
+                      </span>
                     </div>
-                    <span style={{
-                      padding: '6px 12px',
-                      borderRadius: '15px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      backgroundColor: employee.can_drive_company_vehicles ? '#27ae60' : '#e74c3c',
-                      color: 'white'
-                    }}>
-                      {employee.can_drive_company_vehicles ? '✅ Fahrberechtigt' : '❌ Nicht berechtigt'}
-                    </span>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}

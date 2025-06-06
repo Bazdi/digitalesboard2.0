@@ -373,6 +373,11 @@ app.get('/api/employees', (req, res) => {
   let query = 'SELECT * FROM employees';
   let whereConditions = [];
   
+  // IMMER "Sonstige" Mitarbeiter ausschließen (außer explizit alle angefordert)
+  if (filter !== 'all') {
+    whereConditions.push("department != 'Sonstige'");
+  }
+  
   // Filter anwenden - deutsche Begriffe
   if (filter === 'bulletin_board') {
     whereConditions.push('uses_bulletin_board = 1');
@@ -1497,14 +1502,14 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
     
     // ECHTE Datenbank-Abfragen für work4all Dashboard
     const dbQueries = [
-      // Mitarbeiter-Statistiken
+      // Mitarbeiter-Statistiken (OHNE "Sonstige" Mitarbeiter)
       new Promise((resolve) => {
-        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1", (err, row) => {
+        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1 AND department != 'Sonstige'", (err, row) => {
           resolve({ totalEmployees: err ? 0 : (row?.count || 0) });
         });
       }),
       new Promise((resolve) => {
-        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1 AND work_location = 'lager'", (err, row) => {
+        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1 AND work_location = 'lager' AND department != 'Sonstige'", (err, row) => {
           resolve({ warehouseEmployees: err ? 0 : (row?.count || 0) });
         });
       }),
@@ -1603,7 +1608,8 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
         db.get(`SELECT COUNT(*) as count FROM employees 
                 WHERE is_active_employee = 1 
                 AND employment_status NOT IN ('urlaub', 'krank')
-                AND work_location IN ('büro', 'außendienst')`, (err, row) => {
+                AND work_location IN ('büro', 'außendienst')
+                AND department != 'Sonstige'`, (err, row) => {
           if (!err) {
             dashboardData.attendance.currentlyOnSite = row.count || 0;
           }
@@ -1613,7 +1619,8 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
       new Promise((resolve) => {
         db.get(`SELECT COUNT(*) as count FROM employees 
                 WHERE is_active_employee = 1 
-                AND work_location = 'remote'`, (err, row) => {
+                AND work_location = 'remote' 
+                AND department != 'Sonstige'`, (err, row) => {
           if (!err) {
             dashboardData.attendance.workingRemote = row.count || 0;
           }
@@ -1621,7 +1628,7 @@ app.get('/api/work4all/dashboard-stats', authenticateToken, async (req, res) => 
         });
       }),
       new Promise((resolve) => {
-        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1", (err, row) => {
+        db.get("SELECT COUNT(*) as count FROM employees WHERE is_active_employee = 1 AND department != 'Sonstige'", (err, row) => {
           if (!err) {
             dashboardData.workforce.workingToday = row.count || 0;
             dashboardData.workforce.scheduledTomorrow = Math.floor((row.count || 0) * 0.95);
@@ -2345,6 +2352,7 @@ app.get('/api/work4all/vacation-details', authenticateToken, (req, res) => {
     JOIN employee_vacation ev ON e.id = ev.employee_id
     WHERE ev.start_date <= date('now') AND ev.end_date >= date('now')
     AND e.is_active_employee = 1
+    AND e.department != 'Sonstige'
     ORDER BY ev.vacation_art_description, e.name
   `, [], (err, rows) => {
     if (err) {
@@ -2366,6 +2374,7 @@ app.get('/api/work4all/sickness-details', authenticateToken, (req, res) => {
     JOIN employee_sickness es ON e.id = es.employee_id
     WHERE es.start_date <= date('now') AND es.end_date >= date('now')
     AND e.is_active_employee = 1
+    AND e.department != 'Sonstige'
     ORDER BY e.name
   `, [], (err, rows) => {
     if (err) {

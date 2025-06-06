@@ -1197,16 +1197,16 @@ class Work4AllSyncService {
       
       console.log(`📅 ${allVacations.length} Urlaubseinträge erhalten`);
       
-      // 4. Lokale Mitarbeiter mit work4all_code laden
+      // 4. Lokale Mitarbeiter mit work4all_code laden (OHNE "Sonstige")
       const localEmployees = await new Promise((resolve, reject) => {
         this.db.all(
-          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1',
+          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1 AND department != "Sonstige"',
           [],
           (err, rows) => err ? reject(err) : resolve(rows)
         );
       });
       
-      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden`);
+      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden (ohne Sonstige)`);
       
       if (localEmployees.length === 0) {
         console.log('⚠️ Keine lokalen Mitarbeiter mit work4all_code - führen Sie zuerst eine Mitarbeiter-Synchronisation durch');
@@ -1457,29 +1457,27 @@ class Work4AllSyncService {
       const work4allUsers = await this.makeApiRequest('GET', '/work4all/benutzer');
       console.log(`📋 ${work4allUsers.length} work4all Benutzer erhalten`);
       
-      // 3. Alle Krankheitsdaten laden
+      // 3. Alle Krankheitsdaten laden (ein API-Call für alle)
       console.log('🤒 Lade alle Krankheitsdaten...');
       const sicknessResponse = await this.makeApiRequest('POST', '/Krankheit/query', {});
-      console.log('🔍 Raw Krankheitsdaten-Antwort:', typeof sicknessResponse, sicknessResponse);
       
-      // Stelle sicher, dass wir ein Array haben
+      // Stelle sicher, dass wir ein Array haben - Krankheit-API gibt direktes Array zurück
       const allSickness = Array.isArray(sicknessResponse) ? sicknessResponse : 
-                         sicknessResponse.data ? sicknessResponse.data : 
-                         sicknessResponse.values ? sicknessResponse.values : 
-                         sicknessResponse.items ? sicknessResponse.items : [];
+                         sicknessResponse.items ? sicknessResponse.items : 
+                         sicknessResponse.values ? sicknessResponse.values : [];
       
       console.log(`📅 ${allSickness.length} Krankheitseinträge erhalten`);
       
-      // 4. Lokale Mitarbeiter mit work4all_code laden
+      // 4. Lokale Mitarbeiter mit work4all_code laden (OHNE "Sonstige")
       const localEmployees = await new Promise((resolve, reject) => {
         this.db.all(
-          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1',
+          'SELECT id, name, work4all_code FROM employees WHERE work4all_code IS NOT NULL AND is_active_employee = 1 AND department != "Sonstige"',
           [],
           (err, rows) => err ? reject(err) : resolve(rows)
         );
       });
       
-      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden`);
+      console.log(`🔍 ${localEmployees.length} lokale Mitarbeiter mit work4all_code gefunden (ohne Sonstige)`);
       
       if (localEmployees.length === 0) {
         console.log('⚠️ Keine lokalen Mitarbeiter mit work4all_code - führen Sie zuerst eine Mitarbeiter-Synchronisation durch');

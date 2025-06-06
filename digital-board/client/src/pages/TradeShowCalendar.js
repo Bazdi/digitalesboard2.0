@@ -115,7 +115,7 @@ const TradeShowCalendar = ({ kiosk = false }) => {
     });
   };
 
-  // Event-Hover Funktionen für mehrere Events mit verbesserter Persistenz
+  // Vereinfachte Event-Hover Funktionen
   const handleEventMouseEnter = (events, mouseEvent) => {
     // Lösche bestehende Hide-Timer
     if (hideTimeout) {
@@ -125,15 +125,15 @@ const TradeShowCalendar = ({ kiosk = false }) => {
 
     const rect = mouseEvent.target.getBoundingClientRect();
     
-    // BESSERE POSITIONIERUNG: Unter dem Element statt rechts daneben
+    // Verbesserte Positionierung
     const newPosition = {
-      x: Math.max(10, Math.min(rect.left, window.innerWidth - 420)), // Gleiche x-Position wie Element
-      y: rect.bottom + 5 // Direkt unter dem Element
+      x: Math.max(10, Math.min(rect.left, window.innerWidth - 420)),
+      y: rect.bottom + 8
     };
     
     // Falls nicht genug Platz unten, dann oberhalb
-    if (newPosition.y + 400 > window.innerHeight) {
-      newPosition.y = rect.top - 405; // Oberhalb des Elements
+    if (newPosition.y + 300 > window.innerHeight) {
+      newPosition.y = rect.top - 310;
     }
     
     setHoverPosition(newPosition);
@@ -142,11 +142,11 @@ const TradeShowCalendar = ({ kiosk = false }) => {
   };
 
   const handleEventMouseLeave = () => {
-    // LÄNGERE Verzögerung - gibt mehr Zeit zum Hover auf Tooltip
+    // Kürzere, konsistentere Verzögerung
     const timeout = setTimeout(() => {
-      setHoveredEvents([]);
       setTooltipVisible(false);
-    }, 1000); // 1 Sekunde statt 300ms
+      setHoveredEvents([]);
+    }, 500);
     setHideTimeout(timeout);
   };
 
@@ -156,17 +156,15 @@ const TradeShowCalendar = ({ kiosk = false }) => {
       clearTimeout(hideTimeout);
       setHideTimeout(null);
     }
-    setTooltipVisible(true);
   };
 
   const handleTooltipMouseLeave = () => {
-    // Sofortiges Ausblenden wenn Maus Tooltip verlässt
-    setHoveredEvents([]);
-    setTooltipVisible(false);
-    if (hideTimeout) {
-      clearTimeout(hideTimeout);
-      setHideTimeout(null);
-    }
+    // Konsistente Verzögerung auch beim Verlassen des Tooltips
+    const timeout = setTimeout(() => {
+      setTooltipVisible(false);
+      setHoveredEvents([]);
+    }, 200);
+    setHideTimeout(timeout);
   };
 
   // ERWEITERTE Tooltip-Komponente für mehrere Events mit verbesserter Hover-Persistenz
@@ -1305,6 +1303,60 @@ const TradeShowCalendar = ({ kiosk = false }) => {
                     </div>
                   ))}
                 </div>
+                
+                {/* NEUE Messen-Liste unter dem Monat */}
+                {(() => {
+                  const monthTradeshows = tradeshows.filter(show => {
+                    const startDate = new Date(show.start_date);
+                    const endDate = new Date(show.end_date);
+                    return (startDate.getMonth() === monthIndex && startDate.getFullYear() === currentYear) ||
+                           (endDate.getMonth() === monthIndex && endDate.getFullYear() === currentYear) ||
+                           (startDate.getMonth() < monthIndex && endDate.getMonth() > monthIndex && 
+                            startDate.getFullYear() <= currentYear && endDate.getFullYear() >= currentYear);
+                  });
+                  
+                  if (monthTradeshows.length === 0) return null;
+                  
+                  return (
+                    <div style={{
+                      marginTop: '15px',
+                      padding: '12px',
+                      backgroundColor: '#f8f9fa',
+                      borderRadius: '8px',
+                      border: '1px solid #dee2e6'
+                    }}>
+                      <div style={{
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                        color: '#2c3e50',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        📅 Messen ({monthTradeshows.length})
+                      </div>
+                      {monthTradeshows.map(show => (
+                        <div key={show.id} style={{
+                          fontSize: '11px',
+                          padding: '4px 6px',
+                          marginBottom: '3px',
+                          backgroundColor: 'white',
+                          borderRadius: '4px',
+                          borderLeft: '3px solid #e74c3c',
+                          lineHeight: '1.3'
+                        }}>
+                          <div style={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                            {show.name}
+                          </div>
+                          <div style={{ color: '#7f8c8d', fontSize: '10px' }}>
+                            📍 {show.location} | 📅 {new Date(show.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} - {new Date(show.end_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             ))}
             
@@ -1646,15 +1698,84 @@ const TradeShowCalendar = ({ kiosk = false }) => {
                       </div>
                     )}
                   </div>
-                ))}
+                                    ))}
+                  </div>
+                  
+                  {/* NEUE Messen-Liste unter dem Monat */}
+                  {(() => {
+                    const monthTradeshows = tradeshows.filter(show => {
+                      const startDate = new Date(show.start_date);
+                      const endDate = new Date(show.end_date);
+                      return (startDate.getMonth() === monthIndex && startDate.getFullYear() === currentYear) ||
+                             (endDate.getMonth() === monthIndex && endDate.getFullYear() === currentYear) ||
+                             (startDate.getMonth() < monthIndex && endDate.getMonth() > monthIndex && 
+                              startDate.getFullYear() <= currentYear && endDate.getFullYear() >= currentYear);
+                    });
+                    
+                    if (monthTradeshows.length === 0) return null;
+                    
+                    return (
+                      <div style={{
+                        marginTop: '15px',
+                        padding: '12px',
+                        backgroundColor: '#f8f9fa',
+                        borderRadius: '8px',
+                        border: '1px solid #dee2e6'
+                      }}>
+                        <div style={{
+                          fontWeight: 'bold',
+                          fontSize: '14px',
+                          color: '#2c3e50',
+                          marginBottom: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          📅 Messen ({monthTradeshows.length})
+                        </div>
+                        {monthTradeshows.map(show => (
+                          <div key={show.id} style={{
+                            fontSize: '11px',
+                            padding: '4px 6px',
+                            marginBottom: '3px',
+                            backgroundColor: 'white',
+                            borderRadius: '4px',
+                            borderLeft: '3px solid #e74c3c',
+                            lineHeight: '1.3',
+                            cursor: kiosk ? 'default' : 'pointer'
+                          }}
+                          onClick={() => !kiosk && handleEdit(show)}
+                          onMouseEnter={(e) => {
+                            if (!kiosk) {
+                              e.target.style.backgroundColor = '#e8f4fd';
+                              e.target.style.borderLeftColor = '#3498db';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!kiosk) {
+                              e.target.style.backgroundColor = 'white';
+                              e.target.style.borderLeftColor = '#e74c3c';
+                            }
+                          }}
+                          >
+                            <div style={{ fontWeight: 'bold', color: '#2c3e50' }}>
+                              {show.name}
+                            </div>
+                            <div style={{ color: '#7f8c8d', fontSize: '10px' }}>
+                              📍 {show.location} | 📅 {new Date(show.start_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} - {new Date(show.end_date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ))}
+              
+              {/* NEUE Kommende Messen Panel - füllt die Lücke nach Dezember */}
+              <div style={styles.monthContainer}>
+                <UpcomingTradeShowsPanel tradeshows={tradeshows} />
               </div>
-            </div>
-          ))}
-          
-          {/* NEUE Kommende Messen Panel - füllt die Lücke nach Dezember */}
-          <div style={styles.monthContainer}>
-            <UpcomingTradeShowsPanel tradeshows={tradeshows} />
-          </div>
         </div>
         
         {/* Event Tooltip */}

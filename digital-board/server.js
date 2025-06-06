@@ -2334,6 +2334,49 @@ app.post('/api/work4all/sync-vacation', authenticateToken, async (req, res) => {
   }
 });
 
+// NEUE Route: Details der Mitarbeiter im Urlaub abrufen
+app.get('/api/work4all/vacation-details', authenticateToken, (req, res) => {
+  db.all(`
+    SELECT 
+      e.id, e.name, e.department, e.position_title, e.email, e.work_location,
+      ev.start_date, ev.end_date, ev.vacation_days, ev.vacation_type,
+      ev.vacation_art_code, ev.vacation_art_description
+    FROM employees e
+    JOIN employee_vacation ev ON e.id = ev.employee_id
+    WHERE ev.start_date <= date('now') AND ev.end_date >= date('now')
+    AND e.is_active_employee = 1
+    ORDER BY ev.vacation_art_description, e.name
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Fehler beim Abrufen der Urlaubsdetails:', err);
+      res.status(500).json({ error: 'Fehler beim Abrufen der Urlaubsdetails' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+// NEUE Route: Details der kranken Mitarbeiter abrufen
+app.get('/api/work4all/sickness-details', authenticateToken, (req, res) => {
+  db.all(`
+    SELECT 
+      e.id, e.name, e.department, e.position_title, e.email, e.work_location,
+      es.start_date, es.end_date, es.sickness_days, es.sickness_type
+    FROM employees e
+    JOIN employee_sickness es ON e.id = es.employee_id
+    WHERE es.start_date <= date('now') AND es.end_date >= date('now')
+    AND e.is_active_employee = 1
+    ORDER BY e.name
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Fehler beim Abrufen der Krankheitsdetails:', err);
+      res.status(500).json({ error: 'Fehler beim Abrufen der Krankheitsdetails' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
 // NEUE Route: Krankheits-Synchronisation
 app.post('/api/work4all/sync-sickness', authenticateToken, async (req, res) => {
   try {

@@ -1346,13 +1346,37 @@ class Work4AllSyncService {
             const startDate = todayString;
             const endDateFormatted = endDate || startDate;
             
-            // Speichere in employee_vacation Tabelle
+            // Speichere in employee_vacation Tabelle (lösche zuerst alte Einträge für diesen Mitarbeiter)
             await new Promise((resolve, reject) => {
               this.db.run(
-                `INSERT OR REPLACE INTO employee_vacation 
-                 (employee_id, employee_name, work4all_code, work4all_vacation_code, start_date, end_date, vacation_days, vacation_type, work4all_sync_date) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-                [employee.id, employee.name, employee.work4all_code, employeeVacation.code, startDate, endDateFormatted, consecutiveDays, 'urlaub'],
+                'DELETE FROM employee_vacation WHERE employee_id = ?',
+                [employee.id],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            // Bestimme Urlaubstyp basierend auf urlaubsArtCode (KORRIGIERT)
+            const vacationTypeMapping = {
+              0: 'Urlaub',
+              132060795: 'Überstundenausgleich', // KORRIGIERT: war vorher 'Sonderurlaub'
+              82343268: 'Freier Tag',
+              25035878: 'Sonderurlaub', // KORRIGIERT: war vorher 'Überstundenausgleich'
+              561036427: 'Elternzeit',
+              1308322071: 'Krankheit',
+              221180205: 'Fortbildung',
+              1478672732: 'Betriebsausflug',
+              64072822: 'Feiertag',
+              56431314: 'Homeoffice'
+            };
+            
+            const vacationTypeDescription = vacationTypeMapping[employeeVacation.urlaubsArtCode] || `Code ${employeeVacation.urlaubsArtCode}`;
+            
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                `INSERT INTO employee_vacation 
+                 (employee_id, employee_name, work4all_code, work4all_vacation_code, start_date, end_date, vacation_days, vacation_type, work4all_sync_date, vacation_art_code, vacation_art_description) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`,
+                [employee.id, employee.name, employee.work4all_code, employeeVacation.code, startDate, endDateFormatted, consecutiveDays, 'urlaub', employeeVacation.urlaubsArtCode, vacationTypeDescription],
                 (err) => err ? reject(err) : resolve()
               );
             });
@@ -1595,10 +1619,18 @@ class Work4AllSyncService {
             const startDate = todayString;
             const endDateFormatted = endDate || startDate;
             
-            // Speichere in employee_sickness Tabelle
+            // Speichere in employee_sickness Tabelle (lösche zuerst alte Einträge für diesen Mitarbeiter)
             await new Promise((resolve, reject) => {
               this.db.run(
-                `INSERT OR REPLACE INTO employee_sickness 
+                'DELETE FROM employee_sickness WHERE employee_id = ?',
+                [employee.id],
+                (err) => err ? reject(err) : resolve()
+              );
+            });
+            
+            await new Promise((resolve, reject) => {
+              this.db.run(
+                `INSERT INTO employee_sickness 
                  (employee_id, employee_name, work4all_code, work4all_sickness_code, start_date, end_date, sickness_days, sickness_type, work4all_sync_date) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
                 [employee.id, employee.name, employee.work4all_code, employeeSickness.code, startDate, endDateFormatted, consecutiveDays, 'krankheit'],

@@ -706,22 +706,18 @@ const AdminPanel = ({ user, logout }) => {
           
         case 'vacation':
           addNotification('🏖️ Lade Urlaub-Details...', 'info', 2000);
-          const vacationResponse = await axios.get('/api/employees', {
+          const vacationResponse = await axios.get('/api/work4all/vacation-details', {
             headers: { Authorization: `Bearer ${token}` }
           });
-          data = vacationResponse.data.filter(e => 
-            e.is_active_employee && e.employment_status === 'urlaub'
-          );
+          data = vacationResponse.data;
           break;
           
         case 'sickness':
           addNotification('🤒 Lade Krankheits-Details...', 'info', 2000);
-          const sicknessResponse = await axios.get('/api/employees', {
+          const sicknessResponse = await axios.get('/api/work4all/sickness-details', {
             headers: { Authorization: `Bearer ${token}` }
           });
-          data = sicknessResponse.data.filter(e => 
-            e.is_active_employee && e.employment_status === 'krank'
-          );
+          data = sicknessResponse.data;
           break;
           
         default:
@@ -1086,33 +1082,74 @@ const AdminPanel = ({ user, logout }) => {
           ));
           
         case 'vacation':
-          return modalState.data.map(employee => (
-            <div key={employee.id} style={{
-              padding: '15px',
-              border: '1px solid #f39c12',
-              borderRadius: '8px',
-              marginBottom: '10px',
-              backgroundColor: '#fff3e0'
-            }}>
-              <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '5px' }}>
-                🏖️ {employee.name}
+          // Gruppiere nach Urlaubstyp
+          const vacationByType = {};
+          modalState.data.forEach(employee => {
+            const type = employee.vacation_art_description || 'Urlaub';
+            if (!vacationByType[type]) {
+              vacationByType[type] = [];
+            }
+            vacationByType[type].push(employee);
+          });
+          
+          // Bestimme Emoji und Farbe für jeden Typ
+          const getTypeStyle = (type) => {
+            const styles = {
+              'Urlaub': { emoji: '🏖️', color: '#f39c12', bg: '#fff3e0' },
+              'Sonderurlaub': { emoji: '🎯', color: '#9b59b6', bg: '#f4ecf7' },
+              'Freier Tag': { emoji: '🆓', color: '#27ae60', bg: '#eafaf1' },
+              'Überstundenausgleich': { emoji: '⏰', color: '#3498db', bg: '#ebf3fd' },
+              'Elternzeit': { emoji: '👶', color: '#e74c3c', bg: '#fdf2f2' },
+              'Krankheit': { emoji: '🤒', color: '#e74c3c', bg: '#fdf2f2' },
+              'Fortbildung': { emoji: '📚', color: '#f39c12', bg: '#fff8e1' },
+              'Betriebsausflug': { emoji: '🎉', color: '#9b59b6', bg: '#f4ecf7' },
+              'Feiertag': { emoji: '🎊', color: '#e67e22', bg: '#fef9e7' },
+              'Homeoffice': { emoji: '🏠', color: '#34495e', bg: '#f8f9fa' }
+            };
+            return styles[type] || { emoji: '📅', color: '#7f8c8d', bg: '#f8f9fa' };
+          };
+          
+          return Object.keys(vacationByType).map(type => (
+            <div key={type} style={{ marginBottom: '20px' }}>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: 'bold',
+                color: getTypeStyle(type).color,
+                marginBottom: '10px',
+                borderBottom: `2px solid ${getTypeStyle(type).color}`,
+                paddingBottom: '5px'
+              }}>
+                {getTypeStyle(type).emoji} {type} ({vacationByType[type].length})
               </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px' }}>
-                🏢 {employee.department} | 💼 {employee.position_title}
-              </div>
-              <div style={{ color: '#f39c12', fontSize: '12px', marginTop: '5px' }}>
-                📍 {employee.work_location} | 📧 {employee.email}
-              </div>
-              <div style={{ color: '#e67e22', fontSize: '11px', marginTop: '3px' }}>
-                Status: Im Urlaub (über work4all synchronisiert)
-                {employee.vacation_days_left !== null && employee.vacation_days_left !== undefined && (
-                  <span style={{ color: '#d35400', fontWeight: 'bold' }}>
-                    {employee.vacation_days_left > 0 
-                      ? ` - noch ${employee.vacation_days_left} weitere Werktage${employee.vacation_end_date ? ` (bis einschließlich ${employee.vacation_end_date})` : ''}` 
-                      : ' - letzter Tag'}
-                  </span>
-                )}
-              </div>
+              
+              {vacationByType[type].map(employee => (
+                <div key={employee.id} style={{
+                  padding: '12px',
+                  border: `1px solid ${getTypeStyle(type).color}`,
+                  borderRadius: '6px',
+                  marginBottom: '8px',
+                  backgroundColor: getTypeStyle(type).bg,
+                  marginLeft: '15px'
+                }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '4px' }}>
+                    👤 {employee.name}
+                  </div>
+                  <div style={{ color: '#7f8c8d', fontSize: '13px' }}>
+                    🏢 {employee.department} | 💼 {employee.position_title}
+                  </div>
+                  <div style={{ color: getTypeStyle(type).color, fontSize: '12px', marginTop: '4px' }}>
+                    📍 {employee.work_location} | 📧 {employee.email}
+                  </div>
+                  <div style={{ color: '#555', fontSize: '12px', marginTop: '4px' }}>
+                    📅 {employee.start_date} bis {employee.end_date}
+                    {employee.vacation_days && (
+                      <span style={{ color: getTypeStyle(type).color, fontWeight: 'bold' }}>
+                        {` - ${employee.vacation_days} Tage`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           ));
           
@@ -1135,12 +1172,10 @@ const AdminPanel = ({ user, logout }) => {
                 📍 {employee.work_location} | 📧 {employee.email}
               </div>
               <div style={{ color: '#c62828', fontSize: '11px', marginTop: '3px' }}>
-                Status: Krank (über work4all synchronisiert)
-                {employee.sickness_days_left !== null && employee.sickness_days_left !== undefined && (
+                🤒 Krank: {employee.start_date} bis {employee.end_date}
+                {employee.sickness_days && (
                   <span style={{ color: '#b71c1c', fontWeight: 'bold' }}>
-                    {employee.sickness_days_left > 0 
-                      ? ` - noch ${employee.sickness_days_left} weitere Werktage${employee.sickness_end_date ? ` (bis einschließlich ${employee.sickness_end_date})` : ''}` 
-                      : ' - letzter Tag'}
+                    {` - ${employee.sickness_days} Tage (${employee.sickness_type || 'krankheit'})`}
                   </span>
                 )}
               </div>

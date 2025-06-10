@@ -10,6 +10,9 @@
 # Server Uploads
 /digital-board/public/uploads/
 
+#database
+*.db
+
 # Log-Dateien
 *.log
 

@@ -1039,41 +1039,64 @@ const AdminPanel = ({ user, logout }) => {
           ));
           
         case 'projects':
-          return modalState.data.map(project => (
-            <div key={project.id} style={{
-              padding: '15px',
-              border: '1px solid #ecf0f1',
-              borderRadius: '8px',
-              marginBottom: '10px',
-              backgroundColor: '#f8f9fa'
-            }}>
-              <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '5px' }}>
-                🚀 {project.name}
-              </div>
-              <div style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '5px' }}>
-                👨‍💼 {project.responsible} | 📅 Deadline: {new Date(project.deadline).toLocaleDateString('de-DE')}
-              </div>
-              <div style={{ marginTop: '8px' }}>
-                <div style={{ fontSize: '12px', color: '#7f8c8d', marginBottom: '3px' }}>
-                  Fortschritt: {project.progress}%
+          return modalState.data.map(project => {
+            // Hilfsfunktion für sichere Datums-Formatierung
+            const formatProjectDate = (dateStr) => {
+              if (!dateStr || dateStr === 'null' || dateStr === 'undefined') return null;
+              const date = new Date(dateStr);
+              return isNaN(date.getTime()) ? null : date.toLocaleDateString('de-DE');
+            };
+
+            const startDate = formatProjectDate(project.start_date);
+            const endDate = formatProjectDate(project.end_date);
+
+            return (
+              <div key={project.id || project.code} style={{
+                padding: '15px',
+                border: '1px solid #3498db',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                backgroundColor: '#f8f9fa'
+              }}>
+                <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '8px' }}>
+                  🚀 {project.name}
                 </div>
-                <div style={{
-                  backgroundColor: '#ecf0f1',
-                  borderRadius: '10px',
-                  height: '8px',
-                  overflow: 'hidden'
+                
+                {project.project_number && (
+                  <div style={{ color: '#7f8c8d', fontSize: '12px', marginBottom: '5px' }}>
+                    📋 Projektnummer: {project.project_number}
+                  </div>
+                )}
+                
+                <div style={{ color: '#7f8c8d', fontSize: '14px', marginBottom: '5px' }}>
+                  📅 Zeitraum: {startDate || 'Kein Start'} {endDate ? `bis ${endDate}` : '- kein Ende angegeben'}
+                </div>
+
+                {project.description && (
+                  <div style={{ color: '#555', fontSize: '13px', marginTop: '8px', fontStyle: 'italic' }}>
+                    📝 {project.description}
+                  </div>
+                )}
+
+                {project.location && (
+                  <div style={{ color: '#3498db', fontSize: '12px', marginTop: '5px' }}>
+                    📍 {project.location}
+                  </div>
+                )}
+
+                <div style={{ 
+                  marginTop: '8px', 
+                  padding: '8px', 
+                  backgroundColor: '#e8f4f8', 
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  color: '#2c3e50'
                 }}>
-                  <div style={{
-                    backgroundColor: project.progress >= 80 ? '#27ae60' : 
-                                   project.progress >= 50 ? '#f39c12' : '#3498db',
-                    height: '100%',
-                    width: `${project.progress}%`,
-                    transition: 'width 0.3s ease'
-                  }}></div>
+                  💡 <strong>work4all Projekt</strong> - Daten werden automatisch synchronisiert
                 </div>
               </div>
-            </div>
-          ));
+            );
+          });
           
         case 'deadlines':
           return modalState.data.map(event => (

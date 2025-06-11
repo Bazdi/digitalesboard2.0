@@ -17,7 +17,7 @@ const BirthdayList = ({ kiosk = false }) => {
     birthday: '',
     department: ''
   });
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('aktiv');
   const [timeRange, setTimeRange] = useState('30'); // Neuer State für Zeitraum
 
   useEffect(() => {

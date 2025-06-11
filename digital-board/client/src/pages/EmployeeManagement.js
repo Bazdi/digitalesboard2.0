@@ -15,7 +15,7 @@ const EmployeeManagement = () => {
   const [showContactForm, setShowContactForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [editingContact, setEditingContact] = useState(null);
-  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('aktiv');
   const [selectedEmployees, setSelectedEmployees] = useState([]);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   
@@ -840,7 +840,7 @@ const EmployeeManagement = () => {
                         ...styles.statusBadge,
                         backgroundColor: employee.is_active_employee ? '#27ae60' : '#e74c3c'
                       }}>
-                        {getStatusIcon(employee)} {getEmploymentStatusLabel(employee.employment_status)}
+                        {getEmploymentStatusLabel(employee.employment_status)}
                       </div>
                     </div>
 

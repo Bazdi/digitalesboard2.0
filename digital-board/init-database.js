@@ -309,6 +309,21 @@ db.serialize(() => {
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`, 'warehouse_movements');
 
+  // 17. Project Members Tabelle - FÜR WORK4ALL PROJEKTSYNCHRONISATION
+  createTableWithCallback(`CREATE TABLE IF NOT EXISTS project_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_code INTEGER NOT NULL,
+    project_name TEXT NOT NULL,
+    project_number TEXT,
+    project_leader_code INTEGER,
+    project_leader_name TEXT,
+    employee_code INTEGER,
+    employee_name TEXT,
+    role TEXT DEFAULT 'Mitarbeiter',
+    work4all_sync_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, 'project_members');
+
   console.log('✅ Alle Tabellen erstellt mit vollständigen work4all-Spalten');
   
   // Erstelle Indizes für work4all Performance
@@ -319,6 +334,8 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_vacation_art_code ON employee_vacation(vacation_art_code)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_dates ON employee_sickness(start_date, end_date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_art_code ON employee_sickness(sickness_art_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_project_members_project_code ON project_members(project_code)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_project_members_employee_code ON project_members(employee_code)`);
 
   console.log('✅ work4all Performance-Indizes erstellt');
 

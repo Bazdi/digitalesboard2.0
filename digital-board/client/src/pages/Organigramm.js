@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import DragDropOrgChart from '../components/DragDropOrgChart';
 import axios from 'axios';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const Organigramm = ({ kiosk = false }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [orgData, setOrgData] = useState([]);
   const [allEmployees, setAllEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +61,11 @@ const Organigramm = ({ kiosk = false }) => {
       return () => clearInterval(interval);
     }
   }, [kiosk]);
+
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
   const fetchOrgData = async () => {
     try {

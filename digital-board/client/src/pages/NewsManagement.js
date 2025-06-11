@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import NewsCard from '../components/NewsCard';
 import axios from 'axios';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const NewsManagement = () => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -18,7 +20,7 @@ const NewsManagement = () => {
     is_breaking: false,
     expires_at: '',
     image: null
-  });
+      });
 
   useEffect(() => {
     fetchNews();
@@ -111,6 +113,11 @@ const NewsManagement = () => {
       [name]: type === 'checkbox' ? checked : type === 'file' ? files[0] : value
     }));
   };
+
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
   const resetForm = () => {
     setFormData({

@@ -128,6 +128,43 @@ class Work4AllSyncService {
     }
   }
 
+  // Hilfsfunktion: Extrahiere Durchwahl aus Telefonnummer
+  extractExtensionFromPhone(phoneNumber) {
+    if (!phoneNumber) return null;
+    
+    // Beispiel: "0521-77006-123" -> "123"
+    // Oder: "0521-770061234" -> "1234" (letzte 3-4 Ziffern nach Hausnummer)
+    
+    // Entferne alle Leerzeichen und Bindestriche
+    const cleanPhone = phoneNumber.replace(/[\s-]/g, '');
+    
+    // Standard-Format: 0521-77006 ist die Basis, danach kommt die Durchwahl
+    // Prüfe verschiedene Muster
+    const patterns = [
+      /^0521-77006-(\d+)$/,      // 0521-77006-123
+      /^052177006(\d{3,4})$/,    // 052177006123 oder 0521770061234
+      /^0521-770061?(\d{3,4})$/, // 0521-770061234
+    ];
+    
+    for (const pattern of patterns) {
+      const match = phoneNumber.match(pattern) || cleanPhone.match(pattern);
+      if (match) {
+        return match[1]; // Rückgabe der gefundenen Durchwahl
+      }
+    }
+    
+    // Fallback: Wenn kein Muster passt, versuche die letzten 3-4 Ziffern
+    if (cleanPhone.startsWith('052177006') && cleanPhone.length > 9) {
+      const baseLength = 9; // 052177006
+      const extension = cleanPhone.substring(baseLength);
+      if (extension.length >= 3 && extension.length <= 4) {
+        return extension;
+      }
+    }
+    
+    return null;
+  }
+
   // work4all Mitarbeiter/Ressource prüfen ob es ein Fahrzeug ist
   isVehicleResource(employee) {
     // userType ist in licenseInformation.userType verschachtelt
@@ -402,7 +439,7 @@ class Work4AllSyncService {
       position_title: work4allEmployee.funktion || 'Mitarbeiter',
       phone: work4allEmployee.telefon || null,
       mobile: work4allEmployee.mobil || null,
-      extension: work4allEmployee.zeichen || null, // Kürzel als Durchwahl
+      extension: this.extractExtensionFromPhone(work4allEmployee.telefon) || work4allEmployee.zeichen || null, // Durchwahl aus Telefonnummer extrahieren
       
       // Status und Typen
       employee_type: work4allEmployee.extern ? 'extern' : 'intern',
@@ -541,6 +578,36 @@ class Work4AllSyncService {
       // 3. Veranstaltungen synchronisieren
       const eventResult = await this.performEventSync();
 
+      // 4. URLAUB synchronisieren - FEHLTE KOMPLETT!
+      let vacationResult;
+      try {
+        console.log('\n🏖️ Synchronisiere Urlaubsdaten...');
+        vacationResult = await this.syncVacationData();
+      } catch (vacationError) {
+        console.error('❌ Urlaub-Synchronisation fehlgeschlagen:', vacationError.message);
+        vacationResult = { success: false, error: vacationError.message, processedEmployees: 0, currentVacation: 0 };
+      }
+
+      // 5. KRANKHEIT synchronisieren - FEHLTE KOMPLETT!
+      let sicknessResult;
+      try {
+        console.log('\n🤒 Synchronisiere Krankheitsdaten...');
+        sicknessResult = await this.syncSicknessData();
+      } catch (sicknessError) {
+        console.error('❌ Krankheits-Synchronisation fehlgeschlagen:', sicknessError.message);
+        sicknessResult = { success: false, error: sicknessError.message, processedEmployees: 0, currentSickness: 0 };
+      }
+
+      // 6. PROJEKTMITARBEITER synchronisieren - NEUE FUNKTION!
+      let projectMemberResult;
+      try {
+        console.log('\n👥 Synchronisiere Projektmitarbeiter...');
+        projectMemberResult = await this.syncProjectMembers();
+      } catch (projectError) {
+        console.error('❌ Projektmitarbeiter-Synchronisation fehlgeschlagen:', projectError.message);
+        projectMemberResult = { success: false, error: projectError.message, processedProjects: 0, totalAssignments: 0 };
+      }
+
       console.log('\n📊 Vollständige Synchronisation abgeschlossen:');
       console.log('\n👥 MITARBEITER:');
       console.log(`✅ Erstellt: ${empCreated} Mitarbeiter`);
@@ -592,6 +659,24 @@ class Work4AllSyncService {
           errors: eventResult.errors
         } : {
           error: eventResult.error
+        },
+        vacation: vacationResult.success ? {
+          processedEmployees: vacationResult.processedEmployees,
+          currentVacation: vacationResult.currentVacation
+        } : {
+          error: vacationResult.error
+        },
+        sickness: sicknessResult.success ? {
+          processedEmployees: sicknessResult.processedEmployees,
+          currentSickness: sicknessResult.currentSickness
+        } : {
+          error: sicknessResult.error
+        },
+        projectMembers: projectMemberResult.success ? {
+          processedProjects: projectMemberResult.processedProjects,
+          totalAssignments: projectMemberResult.totalAssignments
+        } : { 
+          error: projectMemberResult.error
         }
       };
 
@@ -1690,6 +1775,104 @@ class Work4AllSyncService {
       
     } catch (error) {
       console.error('❌ Fehler bei Krankheits-Synchronisation:', error);
+      throw error;
+    }
+  }
+  // NEUE METHODE: Projektmitarbeiter synchronisieren
+  async syncProjectMembers() {
+    try {
+      console.log('👥 Starte Projektmitarbeiter-Synchronisation...');
+      
+      // 1. Hole alle Projektgruppen von work4all
+      const projectGroups = await this.fetchProjectGroupsFromWork4All();
+      console.log(`📁 ${projectGroups.length} Projektgruppen gefunden`);
+      
+      let processedProjects = 0;
+      let totalAssignments = 0;
+      
+      // 2. Für jede Projektgruppe die Projekte und Mitarbeiter laden
+      for (const group of projectGroups) {
+        try {
+          const projects = await this.fetchProjectsFromGroup(group.code);
+          
+                      for (const project of projects) {
+              // Nur aktive Projekte/Events verarbeiten
+              if (this.isValidEvent(project)) {
+                // Prüfe ob Kundenbetreuer zugeordnet ist
+                if (project.kundenApCode && project.kundenApCode > 0) {
+                  // Speichere Projektmitarbeiter in der Datenbank
+                  await this.syncProjectMembersToDatabase(project, project.kundenApCode);
+                  totalAssignments++;
+                }
+                
+                processedProjects++;
+              }
+            }
+        } catch (groupError) {
+          console.error(`❌ Fehler bei Projektgruppe ${group.code}:`, groupError.message);
+        }
+      }
+      
+      console.log('\n📊 Projektmitarbeiter-Synchronisation abgeschlossen:');
+      console.log(`📁 Projekte verarbeitet: ${processedProjects}`);
+      console.log(`👥 Mitarbeiter-Zuordnungen: ${totalAssignments}`);
+      
+      return {
+        success: true,
+        processedProjects,
+        totalAssignments,
+        message: `${totalAssignments} Projektmitarbeiter-Zuordnungen synchronisiert`
+      };
+      
+    } catch (error) {
+      console.error('❌ Fehler bei Projektmitarbeiter-Synchronisation:', error);
+      throw error;
+    }
+  }
+
+
+
+  // Hilfsmethode: Projektmitarbeiter in Datenbank speichern
+  async syncProjectMembersToDatabase(project, projektLeiterCode) {
+    try {
+      // Lösche alte Zuordnungen für dieses Projekt
+      await new Promise((resolve, reject) => {
+        this.db.run(
+          'DELETE FROM project_members WHERE project_code = ?',
+          [project.code],
+          (err) => err ? reject(err) : resolve()
+        );
+      });
+      
+      // Finde lokalen Mitarbeiter anhand work4all_code
+      const localEmployee = await new Promise((resolve, reject) => {
+        this.db.get(
+          'SELECT id, name FROM employees WHERE work4all_code = ?',
+          [projektLeiterCode],
+          (err, row) => err ? reject(err) : resolve(row)
+        );
+      });
+      
+      if (localEmployee) {
+        await new Promise((resolve, reject) => {
+          this.db.run(
+            `INSERT INTO project_members 
+             (project_code, project_name, employee_code, employee_name, role, work4all_last_update) 
+             VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+            [
+              project.code,
+              project.name,
+              projektLeiterCode,
+              localEmployee.name,
+              'Kundenbetreuer'
+            ],
+            (err) => err ? reject(err) : resolve()
+          );
+        });
+      }
+      
+    } catch (error) {
+      console.error(`❌ Fehler beim Speichern der Projektmitarbeiter für ${project.name}:`, error.message);
       throw error;
     }
   }

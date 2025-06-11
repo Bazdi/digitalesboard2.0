@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const PhoneList = ({ kiosk = false }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [employees, setEmployees] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -112,16 +114,43 @@ const PhoneList = ({ kiosk = false }) => {
     }
   };
 
-  // Hilfsfunktion für tel: Links
-  const renderPhoneLink = (phoneNumber, displayText) => {
+  // Hilfsfunktion für TAPI- und tel: Links
+  const renderPhoneLink = (phoneNumber, displayText, isDurchwahl = false) => {
     if (!phoneNumber) return displayText || 'Keine Nummer';
     
+    // Für Durchwahl: Komplette Telefonnummer aufbauen
+    let completePhoneNumber = phoneNumber;
+    if (isDurchwahl && phoneNumber.length <= 4) {
+      // Durchwahl zu kompletter Nummer machen
+      completePhoneNumber = `0521-77006${phoneNumber}`;
+    }
+    
     // Formatiere Telefonnummer für tel: Link (entferne Leerzeichen und andere Zeichen)
-    const cleanPhone = phoneNumber.replace(/\s+/g, '').replace(/[^\d+]/g, '');
+    const cleanPhone = completePhoneNumber.replace(/\s+/g, '').replace(/[^\d+]/g, '');
+    
+    // TAPI-Link für Linkus (falls verfügbar) oder tel: Link als Fallback
+    const handlePhoneClick = (e) => {
+      e.preventDefault();
+      
+      // Versuche zuerst TAPI-Link (für Linkus)
+      try {
+        const tapiLink = `linkus:${cleanPhone}`;
+        window.location.href = tapiLink;
+        
+        // Fallback nach kurzer Verzögerung falls TAPI nicht funktioniert
+        setTimeout(() => {
+          window.location.href = `tel:${cleanPhone}`;
+        }, 1000);
+      } catch (error) {
+        // Falls TAPI fehlschlägt, nutze tel: Link
+        window.location.href = `tel:${cleanPhone}`;
+      }
+    };
     
     return (
       <a 
         href={`tel:${cleanPhone}`}
+        onClick={handlePhoneClick}
         style={{
           color: '#3498db',
           textDecoration: 'none',
@@ -129,8 +158,9 @@ const PhoneList = ({ kiosk = false }) => {
         }}
         onMouseOver={(e) => e.target.style.textDecoration = 'underline'}
         onMouseOut={(e) => e.target.style.textDecoration = 'none'}
+        title={`Anrufen: ${completePhoneNumber}`}
       >
-        {displayText || phoneNumber}
+        {displayText || (isDurchwahl ? `${phoneNumber} (${completePhoneNumber})` : phoneNumber)}
       </a>
     );
   };
@@ -307,6 +337,11 @@ const PhoneList = ({ kiosk = false }) => {
     }
   };
 
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -377,7 +412,7 @@ const PhoneList = ({ kiosk = false }) => {
                     {person.extension && (
                       <div style={styles.contactItem}>
                         <span style={styles.contactIcon}>☎️</span>
-                        <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension)}</span>
+                        <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension, true)}</span>
                       </div>
                     )}
                     {person.mobile && person.mobile !== person.phone && (
@@ -529,7 +564,7 @@ const PhoneList = ({ kiosk = false }) => {
                   {person.extension && (
                     <div style={styles.contactItem}>
                       <span style={styles.contactIcon}>☎️</span>
-                      <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension)}</span>
+                      <span style={styles.contactText}>Durchwahl: {renderPhoneLink(person.extension, person.extension, true)}</span>
                     </div>
                   )}
                   {person.mobile && person.mobile !== person.phone && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import axios from 'axios';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 // Setze die Basis-URL für alle API-Anfragen - dynamisch basierend auf Host
 const getApiBaseUrl = () => {
@@ -15,6 +16,8 @@ axios.defaults.baseURL = getApiBaseUrl();
 console.log('🌐 API Base URL:', axios.defaults.baseURL);
 
 const AdminPanel = ({ user, logout }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
+  
   const [work4allStatus, setWork4allStatus] = useState({
     lastSync: null,
     isConnected: false,
@@ -346,18 +349,19 @@ const AdminPanel = ({ user, logout }) => {
     const stepDuration = duration / steps.length;
 
     const interval = setInterval(() => {
-      if (currentStep < steps.length && steps[currentStep]) {
-        setSyncProgress(prev => ({
-          ...prev,
-          progress: steps[currentStep].progress,
-          status: steps[currentStep].status
-        }));
+      if (currentStep < steps.length) {
+        const step = steps[currentStep];
+        if (step) {
+          setSyncProgress(prev => ({
+            ...prev,
+            progress: step.progress,
+            status: step.status
+          }));
+        }
         currentStep++;
       } else {
         clearInterval(interval);
-        setTimeout(() => {
-          setSyncProgress(prev => ({ ...prev, show: false }));
-        }, 1000);
+        // Nicht automatisch verstecken - das wird von der Sync-Funktion gesteuert
       }
     }, stepDuration);
 
@@ -687,7 +691,7 @@ const AdminPanel = ({ user, logout }) => {
             // Formatiere als Projekt für die Anzeige
             projectName: ts.name,
             status: 'Aktiv',
-            progress: Math.floor(Math.random() * 30) + 10 + '%' // 10-40% Fortschritt
+            progress: 0  // WAR: Math.floor(Math.random() * 30) + 10 + '%'
           }));
           break;
           
@@ -1108,6 +1112,16 @@ const AdminPanel = ({ user, logout }) => {
             };
             return styles[type] || { emoji: '📅', color: '#7f8c8d', bg: '#f8f9fa' };
           };
+
+          const formatGermanDate = (dateString) => {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('de-DE', { 
+              day: '2-digit', 
+              month: '2-digit', 
+              year: 'numeric' 
+            });
+          };
           
           return Object.keys(vacationByType).map(type => (
             <div key={type} style={{ marginBottom: '20px' }}>
@@ -1141,7 +1155,7 @@ const AdminPanel = ({ user, logout }) => {
                     📍 {employee.work_location} | 📧 {employee.email}
                   </div>
                   <div style={{ color: '#555', fontSize: '12px', marginTop: '4px' }}>
-                    📅 {employee.start_date} bis {employee.end_date}
+                    📅 {formatGermanDate(employee.start_date)} bis {formatGermanDate(employee.end_date)}
                     {employee.vacation_days && (
                       <span style={{ color: getTypeStyle(type).color, fontWeight: 'bold' }}>
                         {` - ${employee.vacation_days} Tage`}
@@ -1172,7 +1186,7 @@ const AdminPanel = ({ user, logout }) => {
                 📍 {employee.work_location} | 📧 {employee.email}
               </div>
               <div style={{ color: '#c62828', fontSize: '11px', marginTop: '3px' }}>
-                🤒 Krank: {employee.start_date} bis {employee.end_date}
+                🤒 Krank: {formatGermanDate(employee.start_date)} bis {formatGermanDate(employee.end_date)}
                 {employee.sickness_days && (
                   <span style={{ color: '#b71c1c', fontWeight: 'bold' }}>
                     {` - ${employee.sickness_days} Tage (${employee.sickness_type || 'krankheit'})`}
@@ -1448,7 +1462,7 @@ const AdminPanel = ({ user, logout }) => {
             </button>
             
             <button
-              style={{...styles.button, ...styles.primaryButton}}
+              style={{...styles.button, ...styles.warningButton}}
               onClick={() => handleWork4AllSync('vacation')}
               disabled={work4allStatus.syncing}
             >
@@ -1456,7 +1470,7 @@ const AdminPanel = ({ user, logout }) => {
             </button>
             
             <button
-              style={{...styles.button, ...styles.dangerButton}}
+              style={{...styles.button, ...styles.warningButton}}
               onClick={() => handleWork4AllSync('sickness')}
               disabled={work4allStatus.syncing}
             >

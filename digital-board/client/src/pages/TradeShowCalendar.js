@@ -2,8 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const TradeShowCalendar = ({ kiosk = false }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [tradeshows, setTradeshows] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingShow, setEditingShow] = useState(null);
@@ -161,7 +163,7 @@ const TradeShowCalendar = ({ kiosk = false }) => {
   const handleTooltipMouseLeave = () => {
     // Konsistente Verzögerung auch beim Verlassen des Tooltips
     const timeout = setTimeout(() => {
-      setTooltipVisible(false);
+    setTooltipVisible(false);
       setHoveredEvents([]);
     }, 200);
     setHideTimeout(timeout);
@@ -1120,6 +1122,11 @@ const TradeShowCalendar = ({ kiosk = false }) => {
     );
   };
 
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
+
   if (kiosk) {
     return (
       <div style={styles.container}>
@@ -1698,8 +1705,8 @@ const TradeShowCalendar = ({ kiosk = false }) => {
                       </div>
                     )}
                   </div>
-                                    ))}
-                  </div>
+                ))}
+              </div>
                   
                   {/* NEUE Messen-Liste unter dem Monat */}
                   {(() => {
@@ -1769,13 +1776,13 @@ const TradeShowCalendar = ({ kiosk = false }) => {
                       </div>
                     );
                   })()}
-                </div>
-              ))}
-              
-              {/* NEUE Kommende Messen Panel - füllt die Lücke nach Dezember */}
-              <div style={styles.monthContainer}>
-                <UpcomingTradeShowsPanel tradeshows={tradeshows} />
-              </div>
+            </div>
+          ))}
+          
+          {/* NEUE Kommende Messen Panel - füllt die Lücke nach Dezember */}
+          <div style={styles.monthContainer}>
+            <UpcomingTradeShowsPanel tradeshows={tradeshows} />
+          </div>
         </div>
         
         {/* Event Tooltip */}

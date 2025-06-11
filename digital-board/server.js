@@ -323,46 +323,78 @@ app.get('/api/workplan', (req, res) => {
 });
 
 app.post('/api/workplan', authenticateToken, (req, res) => {
-  const { title, description, assigned_to, start_time, end_time, date, position } = req.body;
+  const { title, description, assigned_to, start_time, end_time, date, position, assigned_vehicle } = req.body;
 
   db.run(
-    'INSERT INTO workplan_tasks (title, description, assigned_to, start_time, end_time, date, position) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [title, description, assigned_to, start_time, end_time, date, position],
+    'INSERT INTO workplan_tasks (title, description, assigned_to, start_time, end_time, date, position, assigned_vehicle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [title, description, assigned_to, start_time, end_time, date, position, assigned_vehicle],
     function(err) {
       if (err) {
         console.error('Database error:', err);
         return res.status(500).json({ error: 'Datenbankfehler' });
       }
+      
+      // Fahrzeug-Status auf "unterwegs" setzen falls Fahrzeug zugewiesen
+      if (assigned_vehicle) {
+        db.run('UPDATE vehicles SET status = "unterwegs" WHERE id = ?', [assigned_vehicle], (vehicleErr) => {
+          if (vehicleErr) {
+            console.error('Fehler beim Fahrzeug-Status Update:', vehicleErr);
+          }
+        });
+      }
+      
       res.json({ id: this.lastID, message: 'Aufgabe erstellt' });
     }
   );
 });
 
 app.put('/api/workplan/:id', authenticateToken, (req, res) => {
-  const { title, description, assigned_to, start_time, end_time, date, position } = req.body;
+  const { title, description, assigned_to, start_time, end_time, date, position, assigned_vehicle } = req.body;
   const { id } = req.params;
 
-  db.run(
-    'UPDATE workplan_tasks SET title = ?, description = ?, assigned_to = ?, start_time = ?, end_time = ?, date = ?, position = ? WHERE id = ?',
-    [title, description, assigned_to, start_time, end_time, date, position, id],
-    function(err) {
-      if (err) {
-        console.error('Database error:', err);
-        return res.status(500).json({ error: 'Datenbankfehler' });
-      }
-      res.json({ message: 'Aufgabe aktualisiert' });
+  // Erst das alte Fahrzeug auf "verfügbar" setzen
+  db.get('SELECT assigned_vehicle FROM workplan_tasks WHERE id = ?', [id], (err, row) => {
+    if (!err && row && row.assigned_vehicle) {
+      db.run('UPDATE vehicles SET status = "verfügbar" WHERE id = ?', [row.assigned_vehicle]);
     }
-  );
+    
+    // Dann die Aufgabe aktualisieren
+    db.run(
+      'UPDATE workplan_tasks SET title = ?, description = ?, assigned_to = ?, start_time = ?, end_time = ?, date = ?, position = ?, assigned_vehicle = ? WHERE id = ?',
+      [title, description, assigned_to, start_time, end_time, date, position, assigned_vehicle, id],
+      function(err) {
+        if (err) {
+          console.error('Database error:', err);
+          return res.status(500).json({ error: 'Datenbankfehler' });
+        }
+        
+        // Neues Fahrzeug auf "unterwegs" setzen
+        if (assigned_vehicle) {
+          db.run('UPDATE vehicles SET status = "unterwegs" WHERE id = ?', [assigned_vehicle]);
+        }
+        
+        res.json({ message: 'Aufgabe aktualisiert' });
+      }
+    );
+  });
 });
 
 app.delete('/api/workplan/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
 
-  db.run('DELETE FROM workplan_tasks WHERE id = ?', [id], function(err) {
-    if (err) {
-      return res.status(500).json({ error: 'Datenbankfehler' });
+  // Erst das Fahrzeug auf "verfügbar" setzen
+  db.get('SELECT assigned_vehicle FROM workplan_tasks WHERE id = ?', [id], (err, row) => {
+    if (!err && row && row.assigned_vehicle) {
+      db.run('UPDATE vehicles SET status = "verfügbar" WHERE id = ?', [row.assigned_vehicle]);
     }
-    res.json({ message: 'Aufgabe gelöscht' });
+    
+    // Dann die Aufgabe löschen
+    db.run('DELETE FROM workplan_tasks WHERE id = ?', [id], function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Datenbankfehler' });
+      }
+      res.json({ message: 'Aufgabe gelöscht' });
+    });
   });
 });
 
@@ -3275,3 +3307,86 @@ app.get('/api/kiosk/stats', authenticateToken, (req, res) => {
 });
 
 // ========== ERWEITERTE HEARTBEAT MIT KIOSK-UPDATES ==========
+
+// NEUE Route: Projektmitarbeiter abrufen
+app.get('/api/work4all/project-members', authenticateToken, (req, res) => {
+  const { projectCode } = req.query;
+  
+  let query = `
+    SELECT 
+      pm.project_code, pm.project_name, pm.employee_code, pm.employee_name, pm.role,
+      e.department, e.position_title, e.work_location
+    FROM project_members pm
+    LEFT JOIN employees e ON pm.employee_code = e.work4all_code
+    WHERE 1=1
+  `;
+  
+  const params = [];
+  
+  if (projectCode) {
+    query += ` AND pm.project_code = ?`;
+    params.push(projectCode);
+  }
+  
+  query += ` ORDER BY pm.project_name, pm.role, pm.employee_name`;
+  
+  db.all(query, params, (err, rows) => {
+    if (err) {
+      console.error('Fehler beim Abrufen der Projektmitarbeiter:', err);
+      res.status(500).json({ error: 'Fehler beim Abrufen der Projektmitarbeiter' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+// NEUE Route: Projekt-Übersicht mit Mitarbeitern
+app.get('/api/work4all/projects-with-members', authenticateToken, (req, res) => {
+  db.all(`
+    SELECT 
+      ts.name as project_name,
+      ts.work4all_project_code as project_code,
+      ts.start_date,
+      ts.end_date,
+      ts.location,
+      COUNT(pm.employee_code) as member_count,
+      GROUP_CONCAT(pm.employee_name) as members
+    FROM tradeshows ts
+    LEFT JOIN project_members pm ON ts.work4all_project_code = pm.project_code
+    WHERE ts.work4all_project_code IS NOT NULL
+    GROUP BY ts.work4all_project_code, ts.name
+    ORDER BY ts.start_date DESC
+  `, [], (err, rows) => {
+    if (err) {
+      console.error('Fehler beim Abrufen der Projekte mit Mitarbeitern:', err);
+      res.status(500).json({ error: 'Fehler beim Abrufen der Projekte' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+// NEUE Route: Projektmitarbeiter-Synchronisation
+app.post('/api/work4all/sync-project-members', authenticateToken, async (req, res) => {
+  try {
+    console.log('👥 work4all Projektmitarbeiter-Synchronisation gestartet');
+    
+    const work4allService = new Work4AllSyncService(db);
+    const result = await work4allService.syncProjectMembers();
+    
+    console.log(`✅ Projektmitarbeiter-Synchronisation: ${result.processedProjects} Projekte, ${result.totalAssignments} Zuordnungen`);
+    res.json({
+      success: true,
+      message: 'Projektmitarbeiter-Synchronisation erfolgreich',
+      processedProjects: result.processedProjects,
+      totalAssignments: result.totalAssignments,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('work4all Projektmitarbeiter-Sync Fehler:', error);
+    res.status(500).json({ 
+      error: 'Projektmitarbeiter-Synchronisation fehlgeschlagen',
+      details: error.message 
+    });
+  }
+});

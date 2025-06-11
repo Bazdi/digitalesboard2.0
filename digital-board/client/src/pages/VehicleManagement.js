@@ -4,8 +4,10 @@ import Layout from '../components/Layout';
 import VehicleCard from '../components/VehicleCard';
 import BookingCalendar from '../components/BookingCalendar';
 import axios from 'axios';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const VehicleManagement = () => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [vehicles, setVehicles] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -121,6 +123,11 @@ const VehicleManagement = () => {
       setLoading(false);
     }
   };
+
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
   const handleVehicleSubmit = async (e) => {
     e.preventDefault();

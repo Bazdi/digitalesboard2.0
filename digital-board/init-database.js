@@ -319,7 +319,7 @@ db.serialize(() => {
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_vacation_art_code ON employee_vacation(vacation_art_code)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_dates ON employee_sickness(start_date, end_date)`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_employee_sickness_art_code ON employee_sickness(sickness_art_code)`);
-  
+
   console.log('✅ work4all Performance-Indizes erstellt');
 
   // Standard-Admin erstellen
@@ -458,10 +458,10 @@ db.close((err) => {
           console.log('   1. Server starten: node server.js oder pm2 start server.js --name backend');
           console.log('   2. Frontend bauen: cd client && npm run build');
           console.log('   3. Web-Interface öffnen: http://localhost:3001');
-          console.log('');
-          console.log('Standard Admin-Login:');
-          console.log('Benutzername: admin');
-          console.log('Passwort: admin123');
+    console.log('');
+    console.log('Standard Admin-Login:');
+    console.log('Benutzername: admin');
+    console.log('Passwort: admin123');
         } else {
           console.log('');
           console.log('⚠️ work4all Synchronisation beendet mit Code:', code);

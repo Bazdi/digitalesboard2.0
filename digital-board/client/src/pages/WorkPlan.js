@@ -3,10 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const WorkPlan = ({ kiosk = false }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [currentWeek, setCurrentWeek] = useState(getStartOfWeek(new Date()));
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -19,17 +22,20 @@ const WorkPlan = ({ kiosk = false }) => {
     date: '',
     start_time: '',
     end_time: '',
-    assigned_employees: []
+    assigned_employees: [],
+    assigned_vehicle: null
   });
 
   useEffect(() => {
     fetchTasks();
     fetchEmployees();
+    fetchVehicles();
     
     if (kiosk) {
       const interval = setInterval(() => {
         fetchTasks();
         fetchEmployees();
+        fetchVehicles();
       }, 30000);
       return () => clearInterval(interval);
     }
@@ -58,6 +64,15 @@ const WorkPlan = ({ kiosk = false }) => {
       setEmployees(response.data);
     } catch (error) {
       console.error('Fehler beim Laden der Mitarbeiter:', error);
+    }
+  };
+
+  const fetchVehicles = async () => {
+    try {
+      const response = await axios.get('/api/vehicles');
+      setVehicles(response.data);
+    } catch (error) {
+      console.error('Fehler beim Laden der Fahrzeuge:', error);
     }
   };
 
@@ -112,7 +127,8 @@ const WorkPlan = ({ kiosk = false }) => {
       date: '',
       start_time: '',
       end_time: '',
-      assigned_employees: []
+      assigned_employees: [],
+      assigned_vehicle: null
     });
     setShowTaskForm(false);
     setEditingTask(null);
@@ -139,7 +155,8 @@ const WorkPlan = ({ kiosk = false }) => {
       start_time: task.start_time || '',
       end_time: task.end_time || '',
       assigned_employees: task.assigned_to ? 
-        task.assigned_to.split(', ').map(name => ({ name })) : []
+        task.assigned_to.split(', ').map(name => ({ name })) : [],
+      assigned_vehicle: task.assigned_vehicle || null
     });
     setShowTaskForm(true);
   };
@@ -264,6 +281,12 @@ const WorkPlan = ({ kiosk = false }) => {
       'Buchhaltung': '📊'
     };
     return icons[department] || '👤';
+  };
+
+  const getVehicleInfo = (vehicleId) => {
+    const vehicle = vehicles.find(v => v.id === parseInt(vehicleId));
+    if (!vehicle) return 'Fahrzeug nicht gefunden';
+    return `${vehicle.brand} ${vehicle.model} (${vehicle.license_plate})`;
   };
 
   const weekDays = getWeekDays();
@@ -456,6 +479,15 @@ const WorkPlan = ({ kiosk = false }) => {
       cursor: kiosk ? 'default' : 'pointer',
       transition: 'background-color 0.3s ease',
     },
+    taskVehicle: {
+      backgroundColor: '#e67e22',
+      color: 'white',
+      padding: '4px 8px',
+      borderRadius: '12px',
+      fontSize: '11px',
+      marginTop: '5px',
+      display: 'inline-block',
+    },
     taskActions: {
       display: kiosk ? 'none' : 'flex',
       gap: '5px',
@@ -548,6 +580,11 @@ const WorkPlan = ({ kiosk = false }) => {
       color: 'white',
     }
   };
+
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
   if (kiosk) {
     return (
@@ -736,6 +773,11 @@ const WorkPlan = ({ kiosk = false }) => {
                         ))}
                       </div>
                     )}
+                    {task.assigned_vehicle && (
+                      <div style={styles.taskVehicle}>
+                        🚗 {getVehicleInfo(task.assigned_vehicle)}
+                      </div>
+                    )}
                     <div style={styles.taskActions}>
                       <button
                         style={{...styles.actionButton, ...styles.editTaskButton}}
@@ -841,6 +883,28 @@ const WorkPlan = ({ kiosk = false }) => {
                 </select>
                 <div style={{fontSize: '12px', color: '#7f8c8d', marginTop: '5px'}}>
                   Halten Sie Strg/Cmd gedrückt, um mehrere Mitarbeiter auszuwählen
+                </div>
+              </div>
+              
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Zugewiesenes Fahrzeug (optional):</label>
+                <select
+                  value={taskForm.assigned_vehicle || ''}
+                  onChange={(e) => setTaskForm(prev => ({
+                    ...prev,
+                    assigned_vehicle: e.target.value || null
+                  }))}
+                  style={styles.select}
+                >
+                  <option value="">-- Kein Fahrzeug auswählen --</option>
+                  {vehicles.filter(vehicle => vehicle.status === 'verfügbar').map(vehicle => (
+                    <option key={vehicle.id} value={vehicle.id}>
+                      🚗 {vehicle.brand} {vehicle.model} ({vehicle.license_plate})
+                    </option>
+                  ))}
+                </select>
+                <div style={{fontSize: '12px', color: '#7f8c8d', marginTop: '5px'}}>
+                  Das ausgewählte Fahrzeug wird für die Dauer der Aufgabe blockiert
                 </div>
               </div>
               

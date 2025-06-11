@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const BirthdayList = ({ kiosk = false }) => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [employees, setEmployees] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -220,8 +222,13 @@ const BirthdayList = ({ kiosk = false }) => {
     }
   };
 
-  const upcomingBirthdays = getUpcomingBirthdays();
+    // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
+  const upcomingBirthdays = getUpcomingBirthdays();
+  
   const styles = {
     container: kiosk ? { 
       padding: '40px', 

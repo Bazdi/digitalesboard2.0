@@ -3,8 +3,10 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import axios from 'axios';
 import BulkEditModal from '../components/BulkEditModal';
+import { useMaintenanceMode } from '../hooks/useMaintenanceMode';
 
 const EmployeeManagement = () => {
+  const { isMaintenanceMode, MaintenanceScreen } = useMaintenanceMode();
   const [employees, setEmployees] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -340,6 +342,11 @@ const EmployeeManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Wartungsmodus-Check für alle Benutzer
+  if (isMaintenanceMode) {
+    return <MaintenanceScreen />;
+  }
 
   const fetchData = async () => {
     try {

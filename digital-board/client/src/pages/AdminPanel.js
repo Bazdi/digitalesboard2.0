@@ -984,6 +984,17 @@ const AdminPanel = ({ user, logout }) => {
     if (!modalState.isOpen) return null;
 
     const renderModalContent = () => {
+      // Hilfsfunktionen am Anfang definieren
+      const formatGermanDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('de-DE', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        });
+      };
+
       switch (modalState.type) {
         case 'vehicles':
           return modalState.data.map(vehicle => (
@@ -1113,16 +1124,6 @@ const AdminPanel = ({ user, logout }) => {
             return styles[type] || { emoji: '📅', color: '#7f8c8d', bg: '#f8f9fa' };
           };
 
-          const formatGermanDate = (dateString) => {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('de-DE', { 
-              day: '2-digit', 
-              month: '2-digit', 
-              year: 'numeric' 
-            });
-          };
-          
           return Object.keys(vacationByType).map(type => (
             <div key={type} style={{ marginBottom: '20px' }}>
               <div style={{
